@@ -126,6 +126,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except GatewayError as exc:
         print(f"Could not list tools: {exc}")
         return 1
+    try:
+        profiles = gateway.guardrail_profiles()
+        names = [p.get("profile") for p in profiles.get("profiles") or []]
+        print(f"  guardrail profiles: {', '.join(names) if names else 'none'} (service available={profiles.get('available')})")
+    except GatewayError as exc:
+        print(f"  guardrail profiles: unreadable ({exc.status})")
     return 0
 
 

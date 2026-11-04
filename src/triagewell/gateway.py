@@ -237,6 +237,12 @@ class OtariClient:
             return list(data.get("tools") or data.get("data") or [])
         return list(data)
 
+    def guardrail_profiles(self) -> dict[str, Any]:
+        response = self._http.get("/tool-settings/guardrails/profiles")
+        if response.status_code >= 400:
+            raise _error_from_response(response)
+        return response.json()
+
     def end_user(self, external_id: str) -> dict[str, Any] | None:
         """Read one end user's budget and counters. Needs a service key."""
         response = self._http.get("/end-users", params={"external_id": external_id})
