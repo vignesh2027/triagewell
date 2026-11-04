@@ -1,0 +1,68 @@
+# A local Otari gateway for developing Triagewell without an otari.ai account.
+# It mirrors what the hosted setup in SETUP-OTARI.md creates in the dashboard:
+# two routing policies, a service key whose end users are maintainers, a
+# per-maintainer budget and a team ceiling. Models are small open-weight models
+# served by a local Ollama, so nothing here costs money.
+#
+# Start it with dev/run-local-gateway.sh. The recorded demo uses otari.ai.
+
+database_url: "sqlite+aiosqlite:///./otari-local.db"
+host: "127.0.0.1"
+port: 8000
+master_key: "${OTARI_MASTER_KEY}"
+default_pricing: true
+require_pricing: false
+web_fetch_enabled: true
+
+providers:
+  ollama:
+    api_base: "http://127.0.0.1:11434"
+
+# Local models are free, so give them a token price to make budgets visible.
+pricing:
+  ollama:qwen3:0.6b:
+    input_price_per_million: 0.05
+    output_price_per_million: 0.20
+  ollama:qwen3:1.7b:
+    input_price_per_million: 0.10
+    output_price_per_million: 0.40
+  ollama:gemma3:4b:
+    input_price_per_million: 0.10
+    output_price_per_million: 0.40
+
+routing:
+  policies:
+    triagewell-sorter:
+      select:
+        - default: "ollama:qwen3:0.6b"
+      on_failure:
+        - "ollama:qwen3:1.7b"
+    triagewell-investigator:
+      select:
+        - when:
+            budget_used_pct: {gte: 80}
+          target: "ollama:qwen3:0.6b"
+        - default: "ollama:qwen3:1.7b"
+      on_failure:
+        - "ollama:gemma3:4b"
+
+budgets:
+  maintainer-daily:
+    name: "Per maintainer, per day"
+    max_budget: 0.05
+    reset_alignment: calendar_day
+    rpm_limit: 30
+  triagewell-team:
+    name: "Whole team, per month"
+    max_budget: 2.0
+    reset_alignment: calendar_month
+
+api_keys:
+  triagewell:
+    secret: "${TRIAGEWELL_SERVICE_KEY}"
+    user_id: triagewell
+    is_service_key: true
+    end_user_budget_ids: [maintainer-daily]
+    end_user_budget_id: maintainer-daily
+    max_end_users: 50
+    ceiling: triagewell-team

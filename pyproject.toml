@@ -1,7 +1,7 @@
 [project]
 name = "triagewell"
 version = "0.1.0"
-description = "Issue triage for open-source maintainers."
+description = "Issue triage for open-source maintainers, run through the Otari gateway on open-weight models."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }

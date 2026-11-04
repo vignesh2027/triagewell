@@ -1,0 +1,453 @@
+"""The triage pipeline: one issue in, one maintainer-ready report out."""
+
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable
+
+from . import prompts
+from .config import Role, Settings
+from .gateway import BudgetExceeded, GatewayError, GatewayResult, GuardrailBlocked, OtariClient, UnknownModel
+from .github import Candidate, GitHubReader, Issue, keywords
+from .guard import fence_untrusted, injection_signals, leaks_in_output, redact_secrets
+from .ledger import Ledger
+
+_PY_BLOCK = re.compile(r"```(?:python|py|python3)\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_URL = re.compile(r"https?://[^\s)>\]\"']+")
+
+
+@dataclass
+class Report:
+    id: str
+    issue: dict[str, Any]
+    maintainer: str
+    started_at: str
+    status: str = "running"  # triaged | quarantined | deferred_budget | error
+    sort: dict[str, Any] = field(default_factory=dict)
+    duplicates: list[dict[str, Any]] = field(default_factory=list)
+    repro: dict[str, Any] | None = None
+    investigation: dict[str, Any] = field(default_factory=dict)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    calls: list[dict[str, Any]] = field(default_factory=list)
+    guard: dict[str, Any] = field(default_factory=dict)
+    budget: dict[str, Any] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+    cost_usd: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def parse_json_object(text: str) -> dict[str, Any]:
+    """Pull the last well-formed JSON object out of a model reply."""
+    text = _THINK.sub("", text or "").strip()
+    fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    candidates = fenced[::-1] if fenced else []
+    starts = [m.start() for m in re.finditer(r"\{", text)]
+    for start in starts:
+        depth = 0
+        in_str = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(text[start : i + 1])
+                    break
+    for chunk in sorted(candidates, key=len, reverse=True):
+        try:
+            value = json.loads(chunk)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def extract_python(text: str, max_lines: int = 60) -> str | None:
+    for block in _PY_BLOCK.findall(text or ""):
+        lines = block.strip("\n").splitlines()
+        if 0 < len(lines) <= max_lines:
+            return "\n".join(lines)
+    return None
+
+
+def _clean_labels(labels: Any) -> list[str]:
+    if not isinstance(labels, list):
+        return []
+    allowed = {label.lower(): label for label in prompts.LABELS}
+    out: list[str] = []
+    for label in labels:
+        key = str(label).strip().lower()
+        if key in allowed and allowed[key] not in out:
+            out.append(allowed[key])
+    return out
+
+
+_SOURCE_HINTS = {
+    "web_fetch": ("fetched", "fetch", "url", "http", "page", "docs", "documentation", "linked"),
+    "mcp": ("wiki", "mcp", "deepwiki"),
+    "code_execution": ("sandbox", "ran ", "executed", "execution", "run ", "traceback"),
+}
+
+
+def ground_evidence(evidence: Any, tool_calls: list[dict[str, Any]], repro: dict[str, Any] | None) -> tuple[list[str], list[str]]:
+    """Split the model's evidence into items backed by a tool Otari really ran
+    and items that only the model claims. Small models like to cite pages they
+    never fetched; a maintainer should be able to tell the two apart."""
+    if not isinstance(evidence, list):
+        return [], []
+    used = {str(c.get("type")) for c in tool_calls if c.get("status") == "completed"}
+    if repro and repro.get("via", "").startswith("otari"):
+        used.add("code_execution")
+    backed: list[str] = []
+    claimed: list[str] = []
+    for item in evidence:
+        text = str(item).strip()
+        if not text:
+            continue
+        low = text.lower()
+        needs = [kind for kind, hints in _SOURCE_HINTS.items() if any(h in low for h in hints)]
+        if "issue text" in low or "issue body" in low or not needs or any(kind in used for kind in needs):
+            backed.append(text)
+        else:
+            claimed.append(text)
+    return backed, claimed
+
+
+def judge_repro(stdout: str, stderr: str, return_code: int) -> tuple[bool | None, str]:
+    """Decide what a sandbox run of the reporter's snippet tells us."""
+    combined = f"{stdout}\n{stderr}"
+    missing = re.search(r"ModuleNotFoundError: No module named '([^']+)'", combined)
+    if missing:
+        return None, f"could not run: the sandbox has no '{missing.group(1)}' package"
+    if return_code != 0 or "Traceback (most recent call last)" in combined:
+        last = [line for line in combined.strip().splitlines() if line.strip()]
+        return True, f"reproduced: {last[-1][:200] if last else 'non-zero exit'}"
+    return False, "ran cleanly: the snippet did not show the reported failure"
+
+
+class Triager:
+    def __init__(
+        self,
+        settings: Settings,
+        gateway: OtariClient,
+        github: GitHubReader | None = None,
+        *,
+        on_event: Callable[[str, dict[str, Any]], None] | None = None,
+    ):
+        self.s = settings
+        self.gw = gateway
+        self.gh = github
+        self.ledger = Ledger(settings.home)
+        self.on_event = on_event or (lambda kind, data: None)
+
+    # -- gateway helpers -------------------------------------------------
+
+    def _call(self, report: Report, role: Role, messages: list[dict[str, Any]], **kwargs: Any) -> GatewayResult:
+        """Call one role. If the role's routing policy does not exist on this
+        workspace yet, retry once on the role's catalog model and say so."""
+        common = dict(
+            user=report.maintainer,
+            end_user_budget=self.s.end_user_budget,
+            max_tokens=role.max_tokens,
+            metadata={"app": "triagewell", "role": role.name, "repo": report.issue["repo"]},
+            session_label=f"triagewell {report.issue['repo']}#{report.issue['number']}",
+        )
+        common.update(kwargs)
+        self.on_event("call", {"role": role.name, "model": role.model})
+        try:
+            result = self.gw.chat(role.model, messages, **common)
+        except UnknownModel:
+            if not role.fallback:
+                raise
+            report.notes.append(
+                f"Routing policy '{role.model}' is not defined on this workspace; used catalog model '{role.fallback}' directly."
+            )
+            result = self.gw.chat(role.fallback, messages, **common)
+        entry = {"role": role.name, **result.summary()}
+        report.calls.append(entry)
+        report.cost_usd += result.cost_usd
+        self.on_event("called", entry)
+        return result
+
+    # -- pipeline --------------------------------------------------------
+
+    def run(self, issue: Issue, maintainer: str) -> Report:
+        report = Report(
+            id=uuid.uuid4().hex[:12],
+            issue=issue.to_dict(),
+            maintainer=maintainer,
+            started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        allowance = self.ledger.allowance(maintainer, self.s.daily_limit_usd, self.s.issue_limit_usd)
+        report.budget = {
+            "local_daily_limit_usd": allowance.daily_limit,
+            "local_spent_today_usd": round(allowance.spent_today, 6),
+            "issue_limit_usd": allowance.issue_limit,
+        }
+        if not allowance.can_start:
+            report.status = "deferred_budget"
+            report.notes.append(
+                f"{maintainer} has ${allowance.remaining:.4f} left today, less than one issue may cost "
+                f"(${allowance.issue_limit:.2f}). Skipped before calling the gateway."
+            )
+            return self._finish(report)
+
+        try:
+            self._run(report, issue)
+        except BudgetExceeded as exc:
+            report.status = "deferred_budget"
+            report.budget["otari_refusal"] = {"scope": exc.scope, "retry_after_s": exc.retry_after, "detail": exc.detail[:300]}
+            report.notes.append(f"Otari refused the call: budget '{exc.scope}' is spent. Retry after {exc.retry_after or 'reset'} s.")
+        except GatewayError as exc:
+            report.status = "error"
+            report.notes.append(f"Gateway error {exc.status} {exc.code or ''}: {exc.detail[:300]}")
+        return self._finish(report)
+
+    def _run(self, report: Report, issue: Issue) -> None:
+        s = self.s
+        raw = f"{issue.title}\n\n{issue.body}"
+        redaction = redact_secrets(raw)
+        clean_body = redact_secrets(issue.body).text
+        local_hits = injection_signals(raw)
+        report.guard = {
+            "secrets_redacted": redaction.found,
+            "injection_local": local_hits,
+            "injection_gateway": [],
+            "screen": None,
+            "reply_leaks": [],
+        }
+        if redaction.found:
+            report.notes.append(f"Redacted {len(redaction.found)} secret(s) from the issue before any model saw it.")
+        issue_block = fence_untrusted("ISSUE", redaction.text)
+
+        # 1. Sorter: small, fast model. Otari's prompt-injection guardrail runs on this call.
+        guardrails = [{"profile": s.injection_profile, "mode": s.injection_mode}] if s.injection_profile else None
+        quarantined = bool(local_hits)
+        try:
+            sort_result = self._call(
+                report,
+                s.sorter,
+                [
+                    {"role": "system", "content": prompts.SORTER_SYSTEM},
+                    {"role": "user", "content": prompts.sorter_user(issue_block, issue.repo, issue.title)},
+                ],
+                guardrails=guardrails,
+            )
+            report.guard["injection_gateway"] = sort_result.guardrails
+            if sort_result.guardrail_flagged:
+                quarantined = True
+            sort = parse_json_object(sort_result.content)
+        except GuardrailBlocked as exc:
+            quarantined = True
+            report.guard["injection_gateway"] = [{"profile": s.injection_profile, "mode": "block", "valid": False, "status": "evaluated"}]
+            report.notes.append(f"Otari's guardrail refused the issue text ({exc.code}).")
+            sort = {}
+        sort.setdefault("summary", issue.title)
+        sort["search_terms"] = [str(t) for t in (sort.get("search_terms") or keywords(issue.title))][:5]
+        links = [u for u in (sort.get("links") or []) if isinstance(u, str) and u.startswith("http")]
+        links += [u for u in _URL.findall(clean_body) if u not in links]
+        sort["links"] = links[:3]
+        report.sort = sort
+        self.on_event("sorted", sort)
+
+        # 2. Duplicate search, read-only against GitHub.
+        candidates: list[Candidate] = []
+        if self.gh is not None:
+            candidates = self.gh.similar(issue, sort["search_terms"])
+        report.duplicates = [c.__dict__ for c in candidates]
+
+        # 3. Run the reporter's snippet in Otari's sandbox, with no model involved.
+        snippet = extract_python(clean_body)
+        if snippet and s.code_execution and not quarantined:
+            run = self.gw.execute_code(snippet, user=report.maintainer)
+            reproduced, verdict = judge_repro(run.stdout, run.stderr, run.return_code)
+            report.repro = {
+                "via": "otari /code/execute",
+                "code": snippet,
+                "stdout": run.stdout[-2000:],
+                "stderr": run.stderr[-2000:],
+                "return_code": run.return_code,
+                "reproduced": reproduced,
+                "verdict": verdict,
+            }
+            report.cost_usd += run.cost_usd
+            self.on_event("repro", report.repro)
+        elif snippet and quarantined:
+            report.repro = {"via": "skipped", "verdict": "not run: the issue was quarantined", "reproduced": None}
+
+        # 4. Investigator: larger model with Otari's tools, unless quarantined.
+        tools: list[dict[str, Any]] = []
+        mcp_servers = None
+        mcp_server_ids = None
+        notes = []
+        if not quarantined:
+            if s.web_fetch and sort["links"]:
+                tools.append({"type": "otari_web_fetch"})
+                notes.append("otari_web_fetch for the linked pages")
+            if s.code_execution:
+                tools.append({"type": "otari_code_execution"})
+                notes.append("otari_code_execution for a short Python check")
+            if s.mcp_server_id:
+                mcp_server_ids = [s.mcp_server_id]
+                notes.append("the repository wiki over MCP")
+            elif s.mcp_url:
+                mcp_servers = [
+                    {
+                        "name": "repo_wiki",
+                        "url": s.mcp_url,
+                        "purpose_hint": f"Ask how {issue.repo} works. Pass repoName='{issue.repo}'.",
+                        "allowed_tools": s.mcp_allowed_tools or None,
+                    }
+                ]
+                notes.append(f"the repository wiki over MCP (repoName '{issue.repo}')")
+        dup_text = "\n".join(f"#{c.number} [{c.state}] {c.title}" for c in candidates) or "none found"
+        repro_text = json.dumps({k: v for k, v in (report.repro or {}).items() if k != "code"}) if report.repro else "no snippet to run"
+        result = self._call(
+            report,
+            s.investigator,
+            [
+                {"role": "system", "content": prompts.INVESTIGATOR_SYSTEM},
+                {
+                    "role": "user",
+                    "content": prompts.investigator_user(
+                        repo=issue.repo,
+                        number=issue.number,
+                        title=issue.title,
+                        issue_block=issue_block,
+                        sort_json=json.dumps(sort, indent=1),
+                        duplicates=dup_text,
+                        repro=repro_text,
+                        quarantined=quarantined,
+                        tools_note=", ".join(notes) if notes else "none",
+                    ),
+                },
+            ],
+            tools=tools or None,
+            mcp_servers=mcp_servers,
+            mcp_server_ids=mcp_server_ids,
+            max_tool_iterations=s.max_tool_iterations if (tools or mcp_servers or mcp_server_ids) else None,
+            temperature=0.2,
+        )
+        report.tool_calls = [_trim_tool_call(c) for c in result.tool_calls]
+        found = parse_json_object(result.content)
+        if not found:
+            found = {"summary": _THINK.sub("", result.content).strip()[:800], "confidence": "low"}
+            report.notes.append("The investigator did not return JSON; its text is shown as the summary.")
+        found["labels"] = _clean_labels(found.get("labels"))
+        if quarantined:
+            found["labels"] = [label for label in found["labels"] if label in {"spam", "needs-info"}] + ["security-review"]
+            found["reply_draft"] = ""
+            found["next_step"] = found.get("next_step") or "Read the issue yourself before acting on it."
+        dup = found.get("duplicate_of")
+        if dup is not None and not any(c.number == _as_int(dup) for c in candidates):
+            report.notes.append(f"Ignored duplicate_of #{dup}: it was not among the issues the search found.")
+            found["duplicate_of"] = None
+        backed, claimed = ground_evidence(found.get("evidence"), result.tool_calls, report.repro)
+        found["evidence"] = backed
+        if claimed:
+            found["unverified_evidence"] = claimed
+            report.notes.append(f"{len(claimed)} evidence item(s) cite a source no tool call backs; listed as unverified.")
+        report.investigation = found
+
+        # 5. Outbound checks on the drafted reply.
+        reply = str(found.get("reply_draft") or "")
+        if reply:
+            leaks = leaks_in_output(reply)
+            if leaks:
+                found["reply_draft"] = redact_secrets(reply).text
+                report.guard["reply_leaks"] = leaks
+                report.notes.append("The drafted reply contained secret-shaped text; it was redacted and posting is blocked.")
+            if s.screen is not None:
+                report.guard["screen"] = self._screen(report, found.get("summary", ""), found["reply_draft"])
+
+        report.status = "quarantined" if quarantined else "triaged"
+
+    def _screen(self, report: Report, summary: str, reply: str) -> dict[str, Any]:
+        """Third model, third role: a safety classifier reads the drafted reply."""
+        assert self.s.screen is not None
+        try:
+            result = self._call(
+                report,
+                self.s.screen,
+                [
+                    {"role": "user", "content": f"Summarize the status of this GitHub issue: {summary[:500]}"},
+                    {"role": "assistant", "content": reply},
+                ],
+                temperature=None,
+            )
+        except GatewayError as exc:
+            return {"verdict": "skipped", "reason": f"{exc.status} {exc.code or ''}".strip()}
+        text = _THINK.sub("", result.content).strip().lower()
+        verdict = "unsafe" if text.startswith("unsafe") else "safe" if text.startswith("safe") else "unclear"
+        return {"verdict": verdict, "raw": text[:60], "model": result.model_served or result.model_requested}
+
+    def _finish(self, report: Report) -> Report:
+        report.cost_usd = round(report.cost_usd, 6)
+        self.ledger.record(report.maintainer, f"{report.issue['repo']}#{report.issue['number']}", report.cost_usd, report.status, report.id)
+        save_report(self.s.home, report)
+        self.on_event("done", {"status": report.status, "cost_usd": report.cost_usd})
+        return report
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(str(value).lstrip("#"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _trim_tool_call(call: dict[str, Any]) -> dict[str, Any]:
+    keep = {k: call.get(k) for k in ("id", "type", "status", "url", "query", "server", "name", "code", "stdout", "stderr", "exit_code", "output", "error")}
+    for key in ("stdout", "stderr", "output"):
+        if isinstance(keep.get(key), str):
+            keep[key] = keep[key][:1500]
+    return {k: v for k, v in keep.items() if v not in (None, "")}
+
+
+def save_report(home: Path, report: Report) -> Path:
+    path = Path(home) / "reports" / f"{report.id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report.to_dict(), indent=2))
+    return path
+
+
+def load_reports(home: Path, limit: int = 50) -> list[dict[str, Any]]:
+    folder = Path(home) / "reports"
+    if not folder.exists():
+        return []
+    files = sorted(folder.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]
+    out = []
+    for path in files:
+        try:
+            out.append(json.loads(path.read_text()))
+        except ValueError:
+            continue
+    return out
+
+
+def load_report(home: Path, report_id: str) -> dict[str, Any] | None:
+    if not re.fullmatch(r"[0-9a-f]{12}", report_id):
+        return None
+    path = Path(home) / "reports" / f"{report_id}.json"
+    return json.loads(path.read_text()) if path.exists() else None

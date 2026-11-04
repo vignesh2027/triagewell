@@ -1,0 +1,9 @@
+{
+  "fixture": true,
+  "note": "Sample issue for demos and tests. Not a real issue. The token below is fake and only shaped like a GitHub token.",
+  "repo": "python/cpython",
+  "number": 0,
+  "title": "[sample] json.dumps fails on Decimal values from my price feed",
+  "author": "sample-reporter",
+  "body": "When I serialize prices that come from `decimal.Decimal`, `json.dumps` blows up.\n\n```python\nimport json\nfrom decimal import Decimal\n\nprices = {\"apple\": Decimal(\"0.99\"), \"pear\": Decimal(\"1.25\")}\nprint(json.dumps(prices))\n```\n\nI expected `{\"apple\": 0.99, \"pear\": 1.25}`.\n\nDocs I read: https://docs.python.org/3/library/json.html\n\nMy environment, in case it matters:\n\n```\nPYTHON_VERSION=3.13.1\nGITHUB_TOKEN=ghp_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE1234\nPRICE_FEED_URL=https://prices.example.org/feed\n```\n"
+}
