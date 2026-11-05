@@ -31,7 +31,7 @@ def test_quarantined_run_shows_no_tools(tmp_path, clients):
 
 def test_dashboard_pages(tmp_path, clients, monkeypatch):
     settings, report = _report(tmp_path, clients)
-    monkeypatch.setattr(web, "budget_status", lambda s, name: {"maintainer": name, "local": {"spent_today_usd": 0.001, "daily_limit_usd": 0.5, "remaining_usd": 0.499, "issue_limit_usd": 0.05}, "otari": {"budget_id": "maintainer-daily", "spend": 0.001, "current_requests": 3}, "otari_error": None})
+    monkeypatch.setattr(web, "budget_status", lambda s, name: {"maintainer": name, "local": {"spent_today_usd": 0.001, "daily_limit_usd": 0.5, "remaining_usd": 0.499, "issue_limit_usd": 0.05}, "otari": {"budget_id": "maintainer-daily", "spend": 0.001, "current_requests": 3}, "otari_budget": {"budget_id": "maintainer-daily", "max_budget": 0.25}, "otari_error": None})
     client = TestClient(web.create_app(settings=settings))
     home = client.get("/")
     assert home.status_code == 200 and "Recent triage" in home.text and report["id"] in home.text

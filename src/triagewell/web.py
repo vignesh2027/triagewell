@@ -166,21 +166,27 @@ def create_app(env_file: str | None = None, settings: Settings | None = None) ->
         for name in names:
             status = await run_in_threadpool(budget_status, settings, name)
             local = status["local"]
-            pct = min(100, int(100 * local["spent_today_usd"] / local["daily_limit_usd"])) if local["daily_limit_usd"] else 0
             otari = status["otari"]
+            limit = (status.get("otari_budget") or {}).get("max_budget")
             if otari:
+                spent = float(otari.get("spend") or 0)
+                pct = min(100, int(100 * spent / limit)) if limit else 0
+                resets = str(otari.get("next_budget_reset_at") or "")[:16].replace("T", " ")
+                head = f'Otari budget <span class="mono">{esc(otari.get("budget_id"))}</span>: ${spent:.6f} of ' + (f"${limit:g}" if limit else "no dollar limit")
                 otari_html = (
-                    f'<div class="kv"><div class="muted">Otari budget</div><div class="mono">{esc(otari.get("budget_id"))}</div>'
-                    f'<div class="muted">Spent (Otari)</div><div class="mono">${float(otari.get("spend") or 0):.6f}</div>'
-                    f'<div class="muted">Requests</div><div class="mono">{esc(otari.get("current_requests"))}</div>'
-                    f'<div class="muted">Resets</div><div class="mono">{esc(otari.get("next_budget_reset_at"))}</div>'
-                    f'<div class="muted">Blocked</div><div>{esc(otari.get("blocked"))}</div></div>'
+                    f'<div class="kv"><div class="muted">Requests</div><div class="mono">{esc(otari.get("current_requests"))}</div>'
+                    f'<div class="muted">Resets</div><div class="mono">{esc(resets)} UTC</div>'
+                    f'<div class="muted">Blocked</div><div>{"yes" if otari.get("blocked") else "no"}</div>'
+                    f'<div class="muted">Local ledger</div><div class="mono">${local["spent_today_usd"]:.6f} of ${local["daily_limit_usd"]:.2f}</div></div>'
                 )
             else:
+                pct = min(100, int(100 * local["spent_today_usd"] / local["daily_limit_usd"])) if local["daily_limit_usd"] else 0
+                head = f'Local ledger: ${local["spent_today_usd"]:.6f} of ${local["daily_limit_usd"]:.2f} today'
                 otari_html = f'<p class="muted">Otari end-user record: {esc(status["otari_error"] or "not created yet")}</p>'
             cards.append(
-                f'<div class="card"><h2>{esc(name)}</h2><div class="muted">Today, Triagewell ledger: ${local["spent_today_usd"]:.6f} of ${local["daily_limit_usd"]:.2f}</div>'
-                f'<div class="meter{" hot" if pct >= 80 else ""}"><i style="width:{pct}%"></i></div><p></p>{otari_html}</div>'
+                f'<div class="card"><h2>{esc(name)}</h2><div class="muted">{head}</div>'
+                f'<div class="meter{" hot" if pct >= 80 else ""}"><i style="width:{pct}%"></i></div>'
+                f'<p class="muted" style="margin:6px 0 12px">{pct}% used</p>{otari_html}</div>'
             )
         body = (
             "<h1>Budgets</h1><p class=\"muted\">Each maintainer is an Otari end user on a service key, with a daily budget of their own; "

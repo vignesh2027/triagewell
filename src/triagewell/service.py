@@ -71,12 +71,16 @@ def budget_status(settings: Settings, maintainer: str) -> dict[str, Any]:
             "issue_limit_usd": allowance.issue_limit,
         },
         "otari": None,
+        "otari_budget": None,
         "otari_error": None,
     }
     try:
         gateway = OtariClient(settings.otari_base_url, settings.otari_api_key, timeout=15)
         try:
             status["otari"] = gateway.end_user(maintainer)
+            if status["otari"]:
+                budget_id = status["otari"].get("budget_id")
+                status["otari_budget"] = next((b for b in gateway.end_user_budgets() if b.get("budget_id") == budget_id), None)
         finally:
             gateway.close()
     except (GatewayError, ValueError) as exc:
