@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import sys
 from typing import Any
@@ -42,11 +43,19 @@ def _clients(settings):
 def cmd_triage(args: argparse.Namespace) -> int:
     settings = load_settings(args.env)
     gateway, github = _clients(settings)
-    if args.file:
+    if args.sample:
+        from .service import SAMPLES, list_samples
+
+        if args.sample not in list_samples():
+            raise ValueError(f"Unknown sample {args.sample!r}. Choose one of: {', '.join(list_samples())}")
+        issue = load_issue_file(SAMPLES / f"{args.sample}.json")
+    elif args.file:
         issue = load_issue_file(args.file)
     else:
         repo, number = parse_ref(args.ref)
         issue = github.issue(repo, number)
+    if args.budget:
+        settings = replace(settings, end_user_budget=args.budget)
     print(f"Triaging {issue.ref} for {args.maintainer}", file=sys.stderr)
     report = Triager(settings, gateway, github, on_event=_progress).run(issue, args.maintainer).to_dict()
     _emit(settings, report, args)
@@ -159,7 +168,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("triage", help="triage one issue")
     p.add_argument("ref", nargs="?", help="OWNER/REPO#NUMBER or an issue URL")
     p.add_argument("--file", help="read the issue from a local JSON file instead of GitHub")
+    p.add_argument("--sample", help="triage a bundled sample issue (pasted-token, prompt-injection, ...)")
     p.add_argument("--as", dest="maintainer", required=True, help="the maintainer this run is billed to")
+    p.add_argument("--budget", help="Otari end-user budget to start a new maintainer on (Otari-End-User-Budget)")
     p.add_argument("--json", action="store_true", help="print the full report as JSON")
     p.add_argument("--post", action="store_true", help="post the draft reply to GitHub (also needs TRIAGEWELL_ALLOW_POST)")
     p.set_defaults(func=cmd_triage)
@@ -189,8 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_mcp)
 
     args = parser.parse_args(argv)
-    if args.command == "triage" and not (args.ref or args.file):
-        parser.error("triage needs OWNER/REPO#NUMBER or --file")
+    if args.command == "triage" and not (args.ref or args.file or args.sample):
+        parser.error("triage needs OWNER/REPO#NUMBER, --sample or --file")
     try:
         return args.func(args)
     except (ValueError, RuntimeError, GatewayError) as exc:

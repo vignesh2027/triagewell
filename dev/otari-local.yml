@@ -52,6 +52,10 @@ budgets:
     max_budget: 0.05
     reset_alignment: calendar_day
     rpm_limit: 30
+  maintainer-trial:
+    name: "New maintainer trial, per day"
+    max_budget: 0.0008
+    reset_alignment: calendar_day
   triagewell-team:
     name: "Whole team, per month"
     max_budget: 2.0
@@ -62,7 +66,7 @@ api_keys:
     secret: "${TRIAGEWELL_SERVICE_KEY}"
     user_id: triagewell
     is_service_key: true
-    end_user_budget_ids: [maintainer-daily]
+    end_user_budget_ids: [maintainer-daily, maintainer-trial]
     end_user_budget_id: maintainer-daily
     max_end_users: 50
     ceiling: triagewell-team

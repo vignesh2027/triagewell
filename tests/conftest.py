@@ -87,6 +87,7 @@ class FakeGateway:
             {"id": "otari_wf_1", "type": "web_fetch", "status": "completed", "url": "https://docs.python.org/3/library/json.html"},
         ]
         self.fallback_roles: set[str] = set()
+        self.hold_limit_tokens: int | None = None
 
     def bodies(self, path: str) -> list[dict[str, Any]]:
         return [r["body"] for r in self.requests if r["path"].endswith(path)]
@@ -110,6 +111,12 @@ class FakeGateway:
         role = (body.get("metadata") or {}).get("role")
         if model in self.unknown_models:
             return httpx.Response(400, json={"detail": f"Unknown model {model}", "code": "invalid_model"}, headers={"Otari-Error-Code": "invalid_model"})
+        if role == "investigator" and self.hold_limit_tokens and body.get("max_tokens", 0) > self.hold_limit_tokens:
+            return httpx.Response(
+                403,
+                json={"detail": "User 'alice' has $0.000300 of budget remaining, less than this request's estimated cost of $0.000900.", "code": "budget_exceeded"},
+                headers={"Otari-Error-Code": "budget_exceeded", "Otari-Budget-Scope": "user"},
+            )
         if self.budget_refusal_on == role:
             return httpx.Response(
                 403,

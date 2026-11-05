@@ -20,6 +20,8 @@ from .ledger import Ledger
 _PY_BLOCK = re.compile(r"```(?:python|py|python3)\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _URL = re.compile(r"https?://[^\s)>\]\"']+")
+_HOLD_REFUSAL = re.compile(r"has \$([0-9]+(?:\.[0-9]+)?) of budget remaining, less than this request's estimated cost of \$([0-9]+(?:\.[0-9]+)?)")
+MIN_RETRY_TOKENS = 400
 
 
 @dataclass
@@ -175,20 +177,48 @@ class Triager:
         )
         common.update(kwargs)
         self.on_event("call", {"role": role.name, "model": role.model})
+        model = role.model
         try:
-            result = self.gw.chat(role.model, messages, **common)
+            result = self.gw.chat(model, messages, **common)
         except UnknownModel:
             if not role.fallback:
                 raise
             report.notes.append(
                 f"Routing policy '{role.model}' is not defined on this workspace; used catalog model '{role.fallback}' directly."
             )
-            result = self.gw.chat(role.fallback, messages, **common)
+            model = role.fallback
+            result = self._chat_within_budget(report, role, model, messages, common)
+        except BudgetExceeded as exc:
+            result = self._shrink_and_retry(report, role, model, messages, common, exc)
         entry = {"role": role.name, **result.summary()}
         report.calls.append(entry)
         report.cost_usd += result.cost_usd
         self.on_event("called", entry)
         return result
+
+    def _chat_within_budget(self, report: Report, role: Role, model: str, messages: list[dict[str, Any]], common: dict[str, Any]) -> GatewayResult:
+        try:
+            return self.gw.chat(model, messages, **common)
+        except BudgetExceeded as exc:
+            return self._shrink_and_retry(report, role, model, messages, common, exc)
+
+    def _shrink_and_retry(
+        self, report: Report, role: Role, model: str, messages: list[dict[str, Any]], common: dict[str, Any], exc: BudgetExceeded
+    ) -> GatewayResult:
+        """Otari holds a request's worst case (its whole output cap) before sending it.
+        When the refusal says the hold, not the spend, is what does not fit, one retry
+        with a smaller output cap can still finish the issue inside the budget."""
+        match = _HOLD_REFUSAL.search(exc.detail)
+        if not match:
+            raise exc
+        remaining, estimate = float(match.group(1)), float(match.group(2))
+        cap = int(common["max_tokens"] * (remaining / estimate) * 0.8) if estimate > 0 else 0
+        if cap < MIN_RETRY_TOKENS:
+            raise exc
+        report.notes.append(
+            f"{role.name}: Otari said ${remaining:.6f} was left against an estimated ${estimate:.6f}; retried with max_tokens {cap} instead of {common['max_tokens']}."
+        )
+        return self.gw.chat(model, messages, **{**common, "max_tokens": cap})
 
     # -- pipeline --------------------------------------------------------
 
@@ -218,7 +248,8 @@ class Triager:
         except BudgetExceeded as exc:
             report.status = "deferred_budget"
             report.budget["otari_refusal"] = {"scope": exc.scope, "retry_after_s": exc.retry_after, "detail": exc.detail[:300]}
-            report.notes.append(f"Otari refused the call: budget '{exc.scope}' is spent. Retry after {exc.retry_after or 'reset'} s.")
+            when = f"retry in {exc.retry_after} s" if exc.retry_after else "no retry time given"
+            report.notes.append(f"Otari refused the call ({exc.scope} budget): {exc.detail[:200]} ({when}).")
         except GatewayError as exc:
             report.status = "error"
             report.notes.append(f"Gateway error {exc.status} {exc.code or ''}: {exc.detail[:300]}")
@@ -358,7 +389,11 @@ class Triager:
         if quarantined:
             found["labels"] = [label for label in found["labels"] if label in {"spam", "needs-info"}] + ["security-review"]
             found["reply_draft"] = ""
-            found["next_step"] = found.get("next_step") or "Read the issue yourself before acting on it."
+            # Never let a quarantined issue's own text choose the next action.
+            found["next_step"] = (
+                "Read this issue yourself before acting on it. It contains instructions aimed at automated "
+                "tools (see Safety); do not follow its links or label changes."
+            )
         dup = found.get("duplicate_of")
         if dup is not None and not any(c.number == _as_int(dup) for c in candidates):
             report.notes.append(f"Ignored duplicate_of #{dup}: it was not among the issues the search found.")

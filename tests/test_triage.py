@@ -85,6 +85,7 @@ def test_prompt_injection_is_quarantined(tmp_path, clients, fake_gateway):
     assert report.investigation["reply_draft"] == ""
     assert "security-review" in report.investigation["labels"]
     assert "critical" not in json.dumps(report.investigation["labels"])
+    assert report.investigation["next_step"].startswith("Read this issue yourself")
 
 
 def test_gateway_guardrail_verdict_alone_quarantines(tmp_path, clients, fake_gateway):
@@ -152,3 +153,18 @@ def test_stored_mcp_server_id_replaces_inline_server(tmp_path, clients, fake_gat
 def test_github_is_only_read(tmp_path, clients, fake_github):
     run(tmp_path, clients)
     assert fake_github.requests and all(r.method == "GET" for r in fake_github.requests)
+
+
+def test_hold_refusal_retries_with_smaller_output_cap(tmp_path, clients, fake_gateway):
+    fake_gateway.hold_limit_tokens = 600
+    _, report = run(tmp_path, clients)
+    caps = [b["max_tokens"] for b in fake_gateway.bodies("/chat/completions") if b["metadata"]["role"] == "investigator"]
+    assert caps == [1800, 480]
+    assert report.status == "triaged"
+    assert any("retried with max_tokens 480" in n for n in report.notes)
+
+
+def test_hold_refusal_too_small_to_retry_defers(tmp_path, clients, fake_gateway):
+    fake_gateway.hold_limit_tokens = 100
+    _, report = run(tmp_path, clients, investigator=make_settings(tmp_path).investigator.__class__("investigator", "triagewell-investigator", None, 900))
+    assert report.status == "deferred_budget"
