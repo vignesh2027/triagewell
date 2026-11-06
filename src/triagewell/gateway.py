@@ -29,6 +29,7 @@ class GatewayResult:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     end_user_budget: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    duration_ms: int | None = None
 
     @property
     def guardrail_flagged(self) -> bool:
@@ -43,6 +44,7 @@ class GatewayResult:
             "attempts": self.attempt_count,
             "cost_usd": round(self.cost_usd, 6),
             "request_id": self.request_id,
+            "duration_ms": self.duration_ms,
         }
 
 
@@ -227,9 +229,10 @@ class OtariClient:
             tool_calls=list(data.get("otari_tool_calls") or []),
             end_user_budget=h.get("Otari-End-User-Budget"),
             usage=usage,
+            duration_ms=int(h["Otari-Response-Duration-Ms"]) if (h.get("Otari-Response-Duration-Ms") or "").isdigit() else None,
         )
 
-    def execute_code(self, code: str, *, user: str | None = None, timeout_seconds: int = 20) -> CodeRun:
+    def execute_code(self, code: str, *, user: str | None = None, timeout_seconds: int = 60) -> CodeRun:
         body: dict[str, Any] = {"code": code, "timeout_seconds": timeout_seconds}
         if user:
             body["user"] = user

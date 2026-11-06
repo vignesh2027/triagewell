@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import prompts
+from . import prompts, replay
 from .config import Role, Settings
-from .gateway import BudgetExceeded, GatewayError, GatewayResult, GuardrailBlocked, OtariClient, UnknownModel
+from .gateway import BudgetExceeded, CodeRun, GatewayError, GatewayResult, GuardrailBlocked, OtariClient, UnknownModel
 from .github import Candidate, GitHubReader, Issue, keywords
 from .guard import fence_untrusted, injection_signals, leaks_in_output, redact_secrets
 from .ledger import Ledger
@@ -88,9 +88,32 @@ def parse_json_object(text: str) -> dict[str, Any]:
     return {}
 
 
+def search_terms(raw: Any, title: str) -> list[str]:
+    """The sorter's search terms as a clean list. Models sometimes return one
+    comma-separated string; iterating that would search for single letters."""
+    if isinstance(raw, str):
+        raw = re.split(r"[,;\n]+", raw)
+    terms = [str(t).strip().strip("`'\"") for t in raw or [] if isinstance(t, (str, int, float))]
+    terms = [t for t in terms if len(t) >= 2]
+    return (terms or keywords(title))[:5]
+
+
+def _from_repl(lines: list[str]) -> list[str]:
+    """Turn a pasted interactive session (>>> and ... prompts) back into code."""
+    if not any(line.startswith(">>>") for line in lines):
+        return lines
+    code = []
+    for line in lines:
+        if line.startswith(">>> ") or line == ">>>":
+            code.append(line[4:])
+        elif line.startswith("... ") or line == "...":
+            code.append(line[4:])
+    return code
+
+
 def extract_python(text: str, max_lines: int = 60) -> str | None:
     for block in _PY_BLOCK.findall(text or ""):
-        lines = block.strip("\n").splitlines()
+        lines = _from_repl(block.strip("\n").splitlines())
         if 0 < len(lines) <= max_lines:
             return "\n".join(lines)
     return None
@@ -139,16 +162,67 @@ def ground_evidence(evidence: Any, tool_calls: list[dict[str, Any]], repro: dict
     return backed, claimed
 
 
-def judge_repro(stdout: str, stderr: str, return_code: int) -> tuple[bool | None, str]:
-    """Decide what a sandbox run of the reporter's snippet tells us."""
-    combined = f"{stdout}\n{stderr}"
+_EXC_NAME = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Error|Exception|Warning))\b")
+_GENERIC = {"Error", "Exception", "Warning", "BaseException"}
+# A snippet that dies on one of these is usually incomplete, not the bug.
+_INCOMPLETE = ("NameError", "SyntaxError", "IndentationError", "ImportError", "ModuleNotFoundError")
+
+
+def reported_exceptions(report_text: str, snippet: str = "") -> set[str]:
+    """Exception and warning names the reporter says they saw, outside their own code."""
+    text = report_text.replace(snippet, " ") if snippet else report_text
+    return {name for name in _EXC_NAME.findall(text) if name not in _GENERIC}
+
+
+_FAILURE_WORDS = re.compile(r"(?i)\btraceback\b|\braise[sd]?\b|\bcrash(es|ed)?\b|\bexception\b|\bthrows?\b|\berrors?\b|\bsegfault|\bbl(ow|ows|ew|own) up\b|\bfail(s|ed|ing)? with\b|\bstack ?trace\b")
+
+
+def describes_failure(report_text: str, snippet: str = "") -> bool:
+    """Whether the reporter describes something failing, as opposed to wrong behaviour."""
+    text = report_text.replace(snippet, " ") if snippet else report_text
+    return bool(_FAILURE_WORDS.search(text))
+
+
+def judge_repro(stdout: str, stderr: str, return_code: int, report_text: str = "", snippet: str = "") -> tuple[bool | None, str, str]:
+    """What a sandbox run of the reporter's snippet tells us.
+
+    Returns (reproduced, verdict, outcome). outcome is one of "reproduced",
+    "refuted", "inconclusive" or "not_run". A run only counts as reproducing
+    the bug when the error the reporter names shows up, and only refutes it
+    when the report names an error and the snippet runs cleanly without it."""
+    status, own = replay.split_output(stdout)
+    return_code = replay.exit_code(stdout, return_code)
+    if (status and status.startswith(replay.INSTALL_FAILED)) or replay.INSTALL_FAILED in stdout:
+        spec = status.split(" ", 1)[1] if status and " " in status else "the pinned release"
+        return None, f"not run: could not install {spec} in the sandbox", "not_run"
+    combined = f"{own}\n{replay.strip_ansi(stderr)}"
     missing = re.search(r"ModuleNotFoundError: No module named '([^']+)'", combined)
     if missing:
-        return None, f"could not run: the sandbox has no '{missing.group(1)}' package"
-    if return_code != 0 or "Traceback (most recent call last)" in combined:
-        last = [line for line in combined.strip().splitlines() if line.strip()]
-        return True, f"reproduced: {last[-1][:200] if last else 'non-zero exit'}"
-    return False, "ran cleanly: the snippet did not show the reported failure"
+        return None, f"not run: the sandbox has no '{missing.group(1)}' package", "not_run"
+    if re.search(r"(?i)\bapi[ _-]?key\b.*\b(not|no|missing)\b|\b(missing|no)\b.*\bapi[ _-]?key\b|AuthenticationError", combined):
+        return None, "not run: the snippet needs credentials the sandbox does not have", "not_run"
+    reported = reported_exceptions(report_text, snippet)
+    lines = [line for line in combined.strip().splitlines() if line.strip()]
+    raised = [line.strip() for line in lines if re.match(r"^\s*[\w.]*(Error|Exception|Warning|Exit|Interrupt)\b.*", line.strip())]
+    last = (raised[-1] if raised else lines[-1] if lines else "non-zero exit")[:200]
+    hit = next((name for name in sorted(reported) if name in combined), None)
+    if hit:
+        line = next((l for l in reversed(lines) if hit in l), last)[:200]
+        return True, f"reproduced: {line}", "reproduced"
+    failed = return_code != 0 or "Traceback (most recent call last)" in combined
+    if failed:
+        if last.startswith(_INCOMPLETE):
+            return None, f"inconclusive: the snippet looks incomplete ({last})", "inconclusive"
+        if reported:
+            return None, f"inconclusive: failed with {last}, but the report describes {', '.join(sorted(reported)[:3])}", "inconclusive"
+        if not describes_failure(report_text, snippet):
+            # The report is about behaviour, not a crash; a crash here is more
+            # likely the snippet's own mistake than the reported bug.
+            return None, f"inconclusive: failed with {last}, but the report does not describe an error", "inconclusive"
+        return True, f"reproduced: {last}", "reproduced"
+    if reported:
+        return False, f"refuted: ran cleanly, without the {', '.join(sorted(reported)[:3])} the report describes", "refuted"
+    return None, "inconclusive: ran without an exception; compare the output with the report", "inconclusive"
 
 
 class Triager:
@@ -242,6 +316,15 @@ class Triager:
         )
         return self.gw.chat(model, messages, **{**common, "max_tokens": cap})
 
+    def _pin(self, issue: Issue, body: str) -> replay.Pin | None:
+        """The release the reporter most likely had, from PyPI, or None."""
+        if self.gh is None:
+            return None
+        name = self.gh.package_name(issue.repo)
+        if not name:
+            return None
+        return replay.choose_pin(name, f"{issue.title}\n{body}", issue.created_at, replay.releases(name))
+
     # -- pipeline --------------------------------------------------------
 
     def run(self, issue: Issue, maintainer: str) -> Report:
@@ -323,7 +406,7 @@ class Triager:
             report.notes.append(f"Otari's guardrail refused the issue text ({exc.code}).")
             sort = {}
         sort.setdefault("summary", issue.title)
-        sort["search_terms"] = [str(t) for t in (sort.get("search_terms") or keywords(issue.title))][:5]
+        sort["search_terms"] = search_terms(sort.get("search_terms"), issue.title)
         links = [u for u in (sort.get("links") or []) if isinstance(u, str) and u.startswith("http")]
         links += [u for u in _URL.findall(clean_body) if u not in links]
         sort["links"] = links[:3]
@@ -338,29 +421,52 @@ class Triager:
 
         # 3. Run the reporter's snippet in Otari's sandbox, with no model involved.
         snippet = extract_python(clean_body)
+        run: CodeRun | None = None
+        pin = None
+        sandbox_failure = "not made"
         if snippet and s.code_execution and not quarantined:
-            run = self.gw.execute_code(snippet, user=report.maintainer if self.gw.is_service_key() else None)
+            pin = self._pin(issue, clean_body) if s.pin_release else None
+            program = replay.sandbox_program(snippet, pin)
+            self.on_event("replay", {"pin": replay.pin_dict(pin)})
+            try:
+                run = self.gw.execute_code(program, user=report.maintainer if self.gw.is_service_key() else None, timeout_seconds=replay.DEADLINE_S + 10)
+            except GatewayError as exc:
+                if isinstance(exc, BudgetExceeded):
+                    raise
+                # A sandbox failure costs the maintainer the verdict, not the whole triage.
+                why = {403: "refused by the firewall in front of the gateway", 504: "timed out at the gateway edge"}.get(exc.status, f"failed at the gateway ({exc.status})")
+                report.notes.append(f"The sandbox run was {why}; no verdict.")
+                sandbox_failure = why
+                run = None
+        if snippet and s.code_execution and not quarantined and run is None:
+            report.repro = {"via": "otari /code/execute", "pinned": replay.pin_dict(pin), "code": snippet, "reproduced": None, "outcome": "not_run", "verdict": f"not run: the sandbox call was {sandbox_failure}"}
+        elif snippet and s.code_execution and not quarantined:
             if not run.cost_usd:
                 # The sandbox response carries no cost; Otari's settled record does.
                 settled = self.gw.settled_cost(run.request_id)
                 if settled is not None:
                     run.cost_usd = settled
-            reproduced, verdict = judge_repro(run.stdout, run.stderr, run.return_code)
+            reproduced, verdict, outcome = judge_repro(run.stdout, run.stderr, run.return_code, clean_body, snippet)
+            _, own_stdout = replay.split_output(run.stdout)
             report.repro = {
                 "via": "otari /code/execute",
                 "request_id": run.request_id,
                 "cost_usd": run.cost_usd,
+                "pinned": replay.pin_dict(pin),
+                "added_packages": replay.extra_installs(run.stdout),
+                "added_imports": replay.added_imports(run.stdout),
                 "code": snippet,
-                "stdout": run.stdout[-2000:],
-                "stderr": run.stderr[-2000:],
-                "return_code": run.return_code,
+                "stdout": own_stdout[-2000:],
+                "stderr": replay.strip_ansi(run.stderr)[-2000:],
+                "return_code": replay.exit_code(run.stdout, run.return_code),
                 "reproduced": reproduced,
+                "outcome": outcome,
                 "verdict": verdict,
             }
             report.cost_usd += run.cost_usd
             self.on_event("repro", report.repro)
         elif snippet and quarantined:
-            report.repro = {"via": "skipped", "verdict": "not run: the issue was quarantined", "reproduced": None}
+            report.repro = {"via": "skipped", "verdict": "not run: the issue was quarantined", "reproduced": None, "outcome": "not_run"}
 
         # 4. Investigator: larger model with Otari's tools, unless quarantined.
         tools: list[dict[str, Any]] = []

@@ -134,19 +134,41 @@ class GitHubReader:
         issues = [self._issue(repo, item) for item in items if "pull_request" not in item and item.get("created_at", "") >= since]
         return issues[:limit]
 
-    def similar(self, issue: Issue, terms: list[str], limit: int = 5) -> list[Candidate]:
-        """Search the same repo for issues sharing the given terms (duplicates check)."""
-        terms = [t for t in terms if t][:5] or keywords(issue.title)
-        if not terms:
-            return []
-        query = f"repo:{issue.repo} is:issue " + " ".join(terms)
-        try:
-            data = self._get("/search/issues", q=query, per_page=limit + 1)
-        except (httpx.HTTPError, RuntimeError):
-            return []
-        found = []
-        for item in data.get("items", []):
-            if int(item["number"]) == issue.number:
+    def package_name(self, repo: str) -> str | None:
+        """The PyPI distribution the repository publishes, from its pyproject.toml."""
+        from .replay import package_name
+
+        return package_name(self._http, repo)
+
+    def similar(self, issue: Issue, terms: list[str], limit: int = 6) -> list[Candidate]:
+        """Search the same repo for older issues like this one (duplicates check).
+
+        GitHub ANDs every word of a query, so five terms usually find nothing.
+        Two narrower searches run instead: the two strongest sorter terms, then
+        the title's own keywords. Only issues opened before this one count: a new
+        issue can only duplicate an older one, and this keeps a replay of an old
+        issue from seeing the future."""
+        queries = []
+        terms = [t for t in terms if t]
+        if terms:
+            queries.append(" ".join(f'"{t}"' if " " in t else t for t in terms[:2]))
+        title_terms = keywords(issue.title, limit=3)
+        if title_terms:
+            queries.append(" ".join(title_terms))
+        found: list[Candidate] = []
+        seen = {issue.number}
+        for words in queries:
+            query = f"repo:{issue.repo} is:issue {words}"
+            if issue.created_at:
+                query += f" created:<{issue.created_at}"
+            try:
+                data = self._get("/search/issues", q=query, per_page=limit)
+            except (httpx.HTTPError, RuntimeError):
                 continue
-            found.append(Candidate(int(item["number"]), item.get("title", ""), item.get("state", ""), item.get("html_url", "")))
-        return found[:limit]
+            for item in data.get("items", []):
+                number = int(item["number"])
+                if number in seen:
+                    continue
+                seen.add(number)
+                found.append(Candidate(number, item.get("title", ""), item.get("state", ""), item.get("html_url", "")))
+        return found[: limit * 2]

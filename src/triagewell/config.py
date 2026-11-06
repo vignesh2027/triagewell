@@ -60,6 +60,7 @@ class Settings:
     web_fetch: bool
     max_tool_iterations: int
     timeout_s: float = 120.0
+    pin_release: bool = True
 
     @property
     def outbox(self) -> Path:
@@ -118,5 +119,6 @@ def load_settings(env_file: str | os.PathLike[str] | None = None) -> Settings:
         code_execution=_bool(env.get("TRIAGEWELL_CODE_EXECUTION"), default=True),
         web_fetch=_bool(env.get("TRIAGEWELL_WEB_FETCH"), default=True),
         max_tool_iterations=int(env.get("TRIAGEWELL_MAX_TOOL_ITERATIONS", "3")),
-        timeout_s=float(env.get("TRIAGEWELL_TIMEOUT_S", "120")),
+        timeout_s=float(env.get("TRIAGEWELL_TIMEOUT_S", "300")),
+        pin_release=_bool(env.get("TRIAGEWELL_PIN_RELEASE"), default=True),
     )

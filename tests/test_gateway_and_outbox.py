@@ -106,3 +106,18 @@ def test_local_outbox(tmp_path):
     path = write_local(settings, _report())
     assert path.exists() and "Thanks" in path.read_text()
     assert write_local(settings, _report(reply="")) is None
+
+
+def test_duplicate_search_runs_two_narrow_queries_on_older_issues(fake_github):
+    import httpx
+
+    from triagewell.github import GitHubReader, Issue
+
+    gh = GitHubReader(transport=httpx.MockTransport(fake_github.handler))
+    issue = Issue("o/r", 50, "Decimal fails in json.dumps", "", "x", created_at="2025-03-01T10:00:00Z")
+    found = gh.similar(issue, ["Decimal", "json", "dumps", "encoder", "float"])
+    queries = [r.url.params["q"] for r in fake_github.requests if r.url.path == "/search/issues"]
+    assert len(queries) == 2
+    assert all("created:<2025-03-01T10:00:00Z" in q for q in queries)
+    assert "Decimal json" in queries[0] and "encoder" not in queries[0]
+    assert [c.number for c in found] == [101, 0]

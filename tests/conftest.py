@@ -91,6 +91,7 @@ class FakeGateway:
         self.service_key = True
         self.busy_once_on: str | None = None
         self.edge_timeout_with_mcp = False
+        self.code_status = 200
         self.tools_available: dict[str, bool] = {"otari_web_fetch": True, "otari_code_execution": True}
 
     def bodies(self, path: str) -> list[dict[str, Any]]:
@@ -102,6 +103,8 @@ class FakeGateway:
         path = request.url.path
         if path.endswith("/chat/completions"):
             return self._chat(body)
+        if path.endswith("/code/execute") and self.code_status != 200:
+            return httpx.Response(self.code_status, text="<HTML>504 Gateway Timeout ERROR</HTML>", headers={"Content-Type": "text/html"})
         if path.endswith("/code/execute"):
             return httpx.Response(200, json={"object": "code_execution.result", **self.code_result, "files": []}, headers={"Otari-Request-ID": "req-code"})
         if path.endswith("/tools"):

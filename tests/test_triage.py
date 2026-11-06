@@ -238,3 +238,12 @@ def test_the_sandbox_cost_is_read_back_from_otari(tmp_path, clients, fake_gatewa
     assert report.repro["cost_usd"] == 0.01
     chat_cost = 0.000050 + 0.000900 + 0.000010
     assert abs(report.cost_usd - (0.01 + chat_cost)) < 1e-9
+
+
+def test_a_sandbox_timeout_costs_the_verdict_not_the_triage(tmp_path, clients, fake_gateway):
+    fake_gateway.code_status = 504
+    _, report = run(tmp_path, clients)
+    assert report.status == "triaged"
+    assert report.repro["outcome"] == "not_run"
+    assert any("timed out at the gateway edge" in n for n in report.notes)
+    assert "timed out" in report.repro["verdict"]
