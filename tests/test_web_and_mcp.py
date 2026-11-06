@@ -86,3 +86,29 @@ def test_mcp_server_tools(tmp_path, clients, monkeypatch):
     assert report["id"] in str(result)
     result = asyncio.run(server.call_tool("get_report", {"report_id": report["id"]}))
     assert "Draft reply" in str(result)
+
+
+def test_dashboard_eval_page(tmp_path, monkeypatch):
+    import json
+
+    r = {"k": 3, "n": 4, "value": 0.75, "ci95": [0.3, 0.95]}
+    none = {"k": 0, "n": 0, "value": None, "ci95": None}
+    results = {
+        "issues": 4, "completed": 4, "repos": {"o/r": 4},
+        "kind": {"accuracy": r, "bug_label_precision": r, "bug_label_recall": none},
+        "duplicates": {k: r for k in ("precision", "recall", "right_original", "search_found_original", "false_flags_on_non_duplicates")},
+        "reproduction": {"outcomes": {"reproduced": 2}, "decisive": r, "reproduced_then_fixed": r, "fixed_and_reproduced": r, "refuted_then_not_fixed": none, "base_rate_fixed_among_ran": r},
+        "grounding": {"share_unverified": r}, "safety": {"quarantined_real_issues": none},
+        "cost_latency": {"total_usd_reported": 0.04, "per_issue_usd": {"median": 0.01}, "sandbox_runs": 3, "wall_s": {"median": 30, "p90": 50},
+                         "otari_duration_ms_median": {"sorter": 400}, "calls": 12, "fallback_calls": 1, "mcp_calls_completed": 2},
+        "per_issue": [{"ref": "o/r#1", "status": "triaged", "kind_true": "bug", "kind_pred": "bug", "dup_true": None, "dup_is_true": False,
+                       "dup_pred": None, "repro": "reproduced", "pinned": "1.2.3", "fixed": True, "cost_usd": 0.0103, "wall_s": 31.0}],
+    }
+    path = tmp_path / "results.json"
+    path.write_text(json.dumps(results))
+    monkeypatch.setattr(web, "EVAL_RESULTS", path)
+    client = TestClient(web.create_app(settings=make_settings(tmp_path)))
+    text = client.get("/eval").text
+    assert "3/4</b> = 75%" in text and "o/r#1" in text and "1.2.3" in text and "n/a" in text
+    monkeypatch.setattr(web, "EVAL_RESULTS", tmp_path / "missing.json")
+    assert "No results yet" in client.get("/eval").text

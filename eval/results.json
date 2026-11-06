@@ -1,0 +1,1010 @@
+{
+ "issues": 54,
+ "completed": 54,
+ "errors": [],
+ "repos": {
+  "pydantic/pydantic": 22,
+  "pallets/click": 12,
+  "mozilla-ai/any-llm": 7,
+  "mozilla-ai/any-agent": 7,
+  "Textualize/rich": 6
+ },
+ "kind": {
+  "accuracy": {
+   "k": 14,
+   "n": 20,
+   "value": 0.7,
+   "ci95": [
+    0.481,
+    0.855
+   ]
+  },
+  "bug_label_precision": {
+   "k": 12,
+   "n": 14,
+   "value": 0.857,
+   "ci95": [
+    0.601,
+    0.96
+   ]
+  },
+  "bug_label_recall": {
+   "k": 12,
+   "n": 16,
+   "value": 0.75,
+   "ci95": [
+    0.505,
+    0.898
+   ]
+  },
+  "confusion": {
+   "feature->feature": 2,
+   "bug->bug": 12,
+   "bug->feature": 1,
+   "bug->question": 3,
+   "feature->bug": 1,
+   "docs->bug": 1
+  }
+ },
+ "duplicates": {
+  "precision": {
+   "k": 10,
+   "n": 12,
+   "value": 0.833,
+   "ci95": [
+    0.552,
+    0.953
+   ]
+  },
+  "recall": {
+   "k": 10,
+   "n": 16,
+   "value": 0.625,
+   "ci95": [
+    0.386,
+    0.815
+   ]
+  },
+  "right_original": {
+   "k": 3,
+   "n": 8,
+   "value": 0.375,
+   "ci95": [
+    0.137,
+    0.694
+   ]
+  },
+  "search_found_original": {
+   "k": 3,
+   "n": 8,
+   "value": 0.375,
+   "ci95": [
+    0.137,
+    0.694
+   ]
+  },
+  "false_flags_on_non_duplicates": {
+   "k": 2,
+   "n": 38,
+   "value": 0.053,
+   "ci95": [
+    0.015,
+    0.173
+   ]
+  }
+ },
+ "reproduction": {
+  "issues_with_snippet": 41,
+  "outcomes": {
+   "inconclusive": 23,
+   "not_run": 13,
+   "refuted": 3,
+   "reproduced": 2
+  },
+  "pinned_release": {
+   "newest release before the issue": 21,
+   "stated in the issue": 20
+  },
+  "decisive": {
+   "k": 5,
+   "n": 28,
+   "value": 0.179,
+   "ci95": [
+    0.079,
+    0.356
+   ]
+  },
+  "reproduced_then_fixed": {
+   "k": 2,
+   "n": 2,
+   "value": 1.0,
+   "ci95": [
+    0.342,
+    1.0
+   ]
+  },
+  "fixed_and_reproduced": {
+   "k": 2,
+   "n": 14,
+   "value": 0.143,
+   "ci95": [
+    0.04,
+    0.399
+   ]
+  },
+  "refuted_then_not_fixed": {
+   "k": 2,
+   "n": 3,
+   "value": 0.667,
+   "ci95": [
+    0.208,
+    0.939
+   ]
+  },
+  "base_rate_fixed_among_ran": {
+   "k": 14,
+   "n": 28,
+   "value": 0.5,
+   "ci95": [
+    0.326,
+    0.674
+   ]
+  },
+  "by_outcome": {
+   "reproduced": {
+    "fixed": 2,
+    "not_fixed": 0
+   },
+   "refuted": {
+    "fixed": 1,
+    "not_fixed": 2
+   },
+   "inconclusive": {
+    "fixed": 11,
+    "not_fixed": 12
+   }
+  }
+ },
+ "grounding": {
+  "evidence_items_kept": 99,
+  "unverified_items": 4,
+  "share_unverified": {
+   "k": 4,
+   "n": 103,
+   "value": 0.039,
+   "ci95": [
+    0.015,
+    0.096
+   ]
+  }
+ },
+ "safety": {
+  "quarantined_real_issues": {
+   "k": 0,
+   "n": 54,
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.066
+   ]
+  },
+  "reply_screen": {
+   "safe": 53,
+   "unsafe": 1
+  }
+ },
+ "cost_latency": {
+  "total_usd_reported": 0.376198,
+  "per_issue_usd": {
+   "mean": 0.006967,
+   "median": 0.010219,
+   "max": 0.020517
+  },
+  "sandbox_runs": 32,
+  "wall_s": {
+   "median": 24.3,
+   "p90": 42.8,
+   "max": 57.7
+  },
+  "otari_duration_ms_median": {
+   "sorter": 516,
+   "investigator": 10563,
+   "screen": 328
+  },
+  "calls": 162,
+  "fallback_calls": 0,
+  "providers": {
+   "sorter:fireworks": 54,
+   "investigator:deepinfra": 54,
+   "screen:deepinfra": 54
+  },
+  "mcp_calls_completed": 20,
+  "tool_loop_timeouts_retried": 2,
+  "otari_settled": {
+   "request_ids": 194,
+   "settled_usd": 0.376198,
+   "not_found": 0
+  }
+ },
+ "feature_request_ids": {
+  "routing_fallback": null,
+  "mcp": {
+   "issue": "pydantic/pydantic#12544",
+   "request_id": "6f0760b4-611d-4097-a614-04cf8a077d64"
+  },
+  "code_execution_reproduced": {
+   "issue": "pydantic/pydantic#12503",
+   "request_id": "55fb3df4-3e18-44cf-a203-a29cc9428b8b"
+  },
+  "code_execution_refuted": {
+   "issue": "pydantic/pydantic#12564",
+   "request_id": "736467ed-a005-4a0b-8824-7103bc1f8604"
+  },
+  "sorter": {
+   "issue": "pydantic/pydantic#12546",
+   "request_id": "93de94f8-4e68-4c5a-acd7-83bc90300a63"
+  },
+  "screen": {
+   "issue": "pydantic/pydantic#12546",
+   "request_id": "136eefbe-328d-4a0f-b088-4d92eef9e521"
+  }
+ },
+ "per_issue": [
+  {
+   "ref": "pydantic/pydantic#12546",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": 10032,
+   "dup_is_true": true,
+   "dup_pred": 10032,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000204,
+   "wall_s": 14.2
+  },
+  {
+   "ref": "pydantic/pydantic#12532",
+   "status": "triaged",
+   "kind_true": "feature",
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": 12131,
+   "repro": "inconclusive",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.010245,
+   "wall_s": 20.3
+  },
+  {
+   "ref": "pydantic/pydantic#12559",
+   "status": "triaged",
+   "kind_true": "feature",
+   "kind_pred": "feature",
+   "dup_true": 10042,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000217,
+   "wall_s": 14.5
+  },
+  {
+   "ref": "pydantic/pydantic#12544",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": 12527,
+   "repro": "not_run",
+   "pinned": "2.12.4",
+   "fixed": true,
+   "cost_usd": 0.000367,
+   "wall_s": 57.7
+  },
+  {
+   "ref": "pydantic/pydantic#12564",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": "refuted",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.010412,
+   "wall_s": 42.7
+  },
+  {
+   "ref": "pydantic/pydantic#12578",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": 6718,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.01036,
+   "wall_s": 38.4
+  },
+  {
+   "ref": "pydantic/pydantic#12602",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": 12046,
+   "dup_is_true": true,
+   "dup_pred": 9013,
+   "repro": "not_run",
+   "pinned": "2.12.3",
+   "fixed": false,
+   "cost_usd": 0.000216,
+   "wall_s": 14.5
+  },
+  {
+   "ref": "pydantic/pydantic#12619",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": 11363,
+   "dup_is_true": true,
+   "dup_pred": 11363,
+   "repro": "not_run",
+   "pinned": "2.12.5",
+   "fixed": false,
+   "cost_usd": 0.000313,
+   "wall_s": 13.5
+  },
+  {
+   "ref": "pydantic/pydantic#12691",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": 11915,
+   "repro": "inconclusive",
+   "pinned": "2.12.5",
+   "fixed": false,
+   "cost_usd": 0.010243,
+   "wall_s": 22.7
+  },
+  {
+   "ref": "pydantic/pydantic#12503",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "reproduced",
+   "pinned": "2.11.7",
+   "fixed": true,
+   "cost_usd": 0.010228,
+   "wall_s": 21.5
+  },
+  {
+   "ref": "pydantic/pydantic#12597",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": 12544,
+   "repro": "not_run",
+   "pinned": "2.12.5",
+   "fixed": false,
+   "cost_usd": 0.000322,
+   "wall_s": 46.1
+  },
+  {
+   "ref": "pydantic/pydantic#12505",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": true,
+   "cost_usd": 0.000368,
+   "wall_s": 26.4
+  },
+  {
+   "ref": "pydantic/pydantic#12514",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "2.12.3",
+   "fixed": true,
+   "cost_usd": 0.020267,
+   "wall_s": 25.0
+  },
+  {
+   "ref": "pydantic/pydantic#12521",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "refuted",
+   "pinned": "2.12.4",
+   "fixed": true,
+   "cost_usd": 0.02038,
+   "wall_s": 27.2
+  },
+  {
+   "ref": "pydantic/pydantic#12529",
+   "status": "triaged",
+   "kind_true": "feature",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "2.12.4",
+   "fixed": true,
+   "cost_usd": 0.010278,
+   "wall_s": 18.9
+  },
+  {
+   "ref": "pydantic/pydantic#12512",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.010381,
+   "wall_s": 26.0
+  },
+  {
+   "ref": "pydantic/pydantic#12515",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.000346,
+   "wall_s": 30.3
+  },
+  {
+   "ref": "pydantic/pydantic#12530",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": 12515,
+   "repro": "inconclusive",
+   "pinned": "2.12.4",
+   "fixed": false,
+   "cost_usd": 0.010217,
+   "wall_s": 24.8
+  },
+  {
+   "ref": "pydantic/pydantic#12542",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000298,
+   "wall_s": 18.1
+  },
+  {
+   "ref": "pydantic/pydantic#12527",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000273,
+   "wall_s": 14.5
+  },
+  {
+   "ref": "pydantic/pydantic#12528",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000164,
+   "wall_s": 10.6
+  },
+  {
+   "ref": "pydantic/pydantic#12585",
+   "status": "triaged",
+   "kind_true": "bug",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000226,
+   "wall_s": 15.2
+  },
+  {
+   "ref": "pallets/click#2872",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000248,
+   "wall_s": 21.0
+  },
+  {
+   "ref": "pallets/click#2871",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": 2676,
+   "dup_is_true": true,
+   "dup_pred": 2676,
+   "repro": "inconclusive",
+   "pinned": "8.1.8",
+   "fixed": false,
+   "cost_usd": 0.010302,
+   "wall_s": 29.7
+  },
+  {
+   "ref": "pallets/click#2876",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": 2868,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000312,
+   "wall_s": 24.3
+  },
+  {
+   "ref": "pallets/click#2865",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "reproduced",
+   "pinned": "8.1.7",
+   "fixed": true,
+   "cost_usd": 0.010269,
+   "wall_s": 19.2
+  },
+  {
+   "ref": "pallets/click#2910",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": 2908,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000273,
+   "wall_s": 23.5
+  },
+  {
+   "ref": "pallets/click#2869",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": 1520,
+   "repro": "inconclusive",
+   "pinned": "8.1.8",
+   "fixed": true,
+   "cost_usd": 0.010182,
+   "wall_s": 16.3
+  },
+  {
+   "ref": "pallets/click#2971",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "8.2.1",
+   "fixed": true,
+   "cost_usd": 0.010216,
+   "wall_s": 18.4
+  },
+  {
+   "ref": "pallets/click#2939",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "8.2.1",
+   "fixed": true,
+   "cost_usd": 0.010416,
+   "wall_s": 34.0
+  },
+  {
+   "ref": "pallets/click#2867",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "8.1.8",
+   "fixed": false,
+   "cost_usd": 0.010304,
+   "wall_s": 32.6
+  },
+  {
+   "ref": "pallets/click#2906",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "8.2.0",
+   "fixed": false,
+   "cost_usd": 0.000366,
+   "wall_s": 28.8
+  },
+  {
+   "ref": "pallets/click#2897",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "8.1.8",
+   "fixed": false,
+   "cost_usd": 0.010349,
+   "wall_s": 34.1
+  },
+  {
+   "ref": "pallets/click#2874",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "refuted",
+   "pinned": "8.1.8",
+   "fixed": false,
+   "cost_usd": 0.010222,
+   "wall_s": 50.6
+  },
+  {
+   "ref": "mozilla-ai/any-llm#472",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "0.20.2",
+   "fixed": true,
+   "cost_usd": 0.010182,
+   "wall_s": 21.8
+  },
+  {
+   "ref": "mozilla-ai/any-llm#494",
+   "status": "triaged",
+   "kind_true": "docs",
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "0.20.3",
+   "fixed": true,
+   "cost_usd": 0.010302,
+   "wall_s": 21.9
+  },
+  {
+   "ref": "mozilla-ai/any-llm#644",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "1.3.0",
+   "fixed": true,
+   "cost_usd": 0.010248,
+   "wall_s": 22.4
+  },
+  {
+   "ref": "mozilla-ai/any-llm#543",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": true,
+   "cost_usd": 0.000216,
+   "wall_s": 49.4
+  },
+  {
+   "ref": "mozilla-ai/any-llm#646",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "1.3.0",
+   "fixed": true,
+   "cost_usd": 0.010404,
+   "wall_s": 39.3
+  },
+  {
+   "ref": "mozilla-ai/any-llm#575",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "1.0.0",
+   "fixed": false,
+   "cost_usd": 0.010229,
+   "wall_s": 23.1
+  },
+  {
+   "ref": "mozilla-ai/any-agent#364",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "docs",
+   "dup_true": 354,
+   "dup_is_true": true,
+   "dup_pred": 331,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000165,
+   "wall_s": 12.1
+  },
+  {
+   "ref": "mozilla-ai/any-agent#708",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": true,
+   "dup_pred": null,
+   "repro": null,
+   "pinned": null,
+   "fixed": false,
+   "cost_usd": 0.000202,
+   "wall_s": 13.1
+  },
+  {
+   "ref": "mozilla-ai/any-llm#619",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "1.2.0",
+   "fixed": false,
+   "cost_usd": 0.01034,
+   "wall_s": 40.1
+  },
+  {
+   "ref": "mozilla-ai/any-agent#279",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "0.14.1",
+   "fixed": true,
+   "cost_usd": 0.000194,
+   "wall_s": 14.6
+  },
+  {
+   "ref": "mozilla-ai/any-agent#148",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "0.8.0",
+   "fixed": true,
+   "cost_usd": 0.010204,
+   "wall_s": 42.8
+  },
+  {
+   "ref": "mozilla-ai/any-agent#176",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "0.10.0",
+   "fixed": true,
+   "cost_usd": 0.010362,
+   "wall_s": 40.6
+  },
+  {
+   "ref": "Textualize/rich#3644",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "13.9.4",
+   "fixed": true,
+   "cost_usd": 0.010208,
+   "wall_s": 18.2
+  },
+  {
+   "ref": "mozilla-ai/any-agent#164",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "0.10.0",
+   "fixed": false,
+   "cost_usd": 0.010301,
+   "wall_s": 42.3
+  },
+  {
+   "ref": "mozilla-ai/any-agent#231",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "feature",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "0.12.3",
+   "fixed": false,
+   "cost_usd": 0.010236,
+   "wall_s": 44.7
+  },
+  {
+   "ref": "Textualize/rich#3682",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "14.0.0",
+   "fixed": true,
+   "cost_usd": 0.010547,
+   "wall_s": 34.2
+  },
+  {
+   "ref": "Textualize/rich#3706",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "docs",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "14.0.0",
+   "fixed": true,
+   "cost_usd": 0.01022,
+   "wall_s": 24.3
+  },
+  {
+   "ref": "Textualize/rich#3641",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "13.9.4",
+   "fixed": false,
+   "cost_usd": 0.020517,
+   "wall_s": 21.9
+  },
+  {
+   "ref": "Textualize/rich#3657",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "question",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "not_run",
+   "pinned": "13.9.4",
+   "fixed": false,
+   "cost_usd": 0.000303,
+   "wall_s": 30.2
+  },
+  {
+   "ref": "Textualize/rich#3672",
+   "status": "triaged",
+   "kind_true": null,
+   "kind_pred": "bug",
+   "dup_true": null,
+   "dup_is_true": false,
+   "dup_pred": null,
+   "repro": "inconclusive",
+   "pinned": "13.9.4",
+   "fixed": false,
+   "cost_usd": 0.011034,
+   "wall_s": 30.5
+  }
+ ]
+}

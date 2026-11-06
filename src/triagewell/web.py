@@ -22,6 +22,7 @@ from .service import budget_status, list_samples, triage
 from .triage import load_report, load_reports
 
 ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
+EVAL_RESULTS = Path(__file__).resolve().parent.parent.parent / "eval" / "results.json"
 
 CSS = """
 :root{--bg:#F4F9FF;--surface:#FFFFFF;--primary:#2563EB;--primary-soft:#E8F0FF;--text:#0B1B33;--muted:#4A5B78;
@@ -74,7 +75,7 @@ def page(title: str, body: str) -> HTMLResponse:
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><style>{CSS}</style></head><body>
 <header><div class="bar"><a href="/"><img src="/assets/logo.svg" alt=""></a>
 <div><a class="brand" href="/">Triagewell</a><div class="sub">Issue triage through Otari, on open-weight models</div></div>
-<nav><a href="/">Triage</a><a href="/budgets">Budgets</a></nav></div></header>
+<nav><a href="/">Triage</a><a href="/eval">Evaluation</a><a href="/budgets">Budgets</a></nav></div></header>
 <main>{body}</main></body></html>"""
     return HTMLResponse(doc)
 
@@ -195,6 +196,9 @@ def create_app(env_file: str | None = None, settings: Settings | None = None) ->
         )
         return page("Triagewell: budgets", body)
 
+    async def evaluation(request: Request) -> Response:
+        return page("Triagewell: evaluation", render_eval(EVAL_RESULTS))
+
     async def asset(request: Request) -> Response:
         name = request.path_params["name"]
         if name not in {"logo.svg", "logo-512.png", "favicon.svg"}:
@@ -211,6 +215,7 @@ def create_app(env_file: str | None = None, settings: Settings | None = None) ->
             Route("/report/{rid}.json", report_json),
             Route("/report/{rid}", report_page),
             Route("/budgets", budgets),
+            Route("/eval", evaluation),
             Route("/assets/{name}", asset),
             Route("/healthz", healthz),
         ]
@@ -308,3 +313,92 @@ def render_report(report: dict[str, Any]) -> str:
         )
     parts.append(f'<p class="muted">Report {esc(report["id"])}. <a href="/report/{esc(report["id"])}.json">JSON</a></p>')
     return "".join(parts)
+
+
+def _fmt_ratio(r: dict[str, Any] | None) -> str:
+    if not r or not r.get("n"):
+        return '<span class="muted">n/a</span>'
+    lo, hi = r["ci95"]
+    return f'<b>{r["k"]}/{r["n"]}</b> = {r["value"]:.0%} <span class="muted">(95% CI {lo:.0%} to {hi:.0%})</span>'
+
+
+def render_eval(path: Path) -> str:
+    """The evaluation table: Triagewell's answers on closed issues, scored
+    against what the maintainers actually did."""
+    if not path.exists():
+        return '<h1>Evaluation</h1><div class="card muted">No results yet. Run <span class="mono">eval/run_eval.py</span> then <span class="mono">eval/score.py</span>.</div>'
+    res = json.loads(path.read_text())
+    first_path = path.with_name("results-v1.json")
+    first = json.loads(first_path.read_text()) if first_path.exists() and first_path != path else None
+    k, d, rp, g, sf, c = (res[x] for x in ("kind", "duplicates", "reproduction", "grounding", "safety", "cost_latency"))
+    keys = [
+        ("kind", "accuracy"), ("kind", "bug_label_precision"), ("kind", "bug_label_recall"),
+        ("duplicates", "precision"), ("duplicates", "recall"), ("duplicates", "right_original"), ("duplicates", "search_found_original"),
+        ("duplicates", "false_flags_on_non_duplicates"), ("reproduction", "decisive"), ("reproduction", "reproduced_then_fixed"),
+        ("reproduction", "fixed_and_reproduced"), ("reproduction", "refuted_then_not_fixed"), ("reproduction", "base_rate_fixed_among_ran"),
+        ("grounding", "share_unverified"), ("safety", "quarantined_real_issues"),
+    ]
+    rows = [
+        ("Kind matches the maintainers' label", k["accuracy"]),
+        ("<span class=mono>bug</span> label precision", k["bug_label_precision"]),
+        ("<span class=mono>bug</span> label recall", k["bug_label_recall"]),
+        ("Duplicate flag precision", d["precision"]),
+        ("Duplicate flag recall", d["recall"]),
+        ("Named the same original as the maintainer", d["right_original"]),
+        ("Search surfaced that original", d["search_found_original"]),
+        ("Non-duplicates wrongly flagged", d["false_flags_on_non_duplicates"]),
+        ("Snippet runs with a decisive verdict", rp["decisive"]),
+        ("&ldquo;Reproduced&rdquo; and a fix was merged", rp["reproduced_then_fixed"]),
+        ("Fixed bugs that reproduced", rp["fixed_and_reproduced"]),
+        ("&ldquo;Refuted&rdquo; and no fix was merged", rp["refuted_then_not_fixed"]),
+        ("Base rate: fixed, among snippets that ran", rp["base_rate_fixed_among_ran"]),
+        ("Evidence items marked unverified", g["share_unverified"]),
+        ("Real issues wrongly quarantined", sf["quarantined_real_issues"]),
+    ]
+    if first:
+        head = "<thead><tr><th>Measure</th><th>Round 2 (after fixes)</th><th>Round 1 (first run)</th></tr></thead>"
+        summary = head + "".join(
+            f"<tr><td>{name}</td><td>{_fmt_ratio(r)}</td><td>{_fmt_ratio(first.get(a, {}).get(b))}</td></tr>"
+            for (name, r), (a, b) in zip(rows, keys)
+        )
+    else:
+        summary = "".join(f"<tr><td>{name}</td><td>{_fmt_ratio(r)}</td></tr>" for name, r in rows)
+    caveat = (
+        '<p class="muted">Round 1 is the first run. Round 2 is after fixing the defects round 1 exposed (search terms split into '
+        "letters, an over-strict duplicate search, snippets missing imports, sandbox runs too slow for the gateway edge, crashes "
+        "counted when the report described none). Round 2 is measured on the same issues, so read it as optimistic.</p>"
+        if first
+        else ""
+    )
+    per = []
+    for i in res.get("per_issue") or []:
+        owner_repo, number = i["ref"].split("#")
+        dup = "" if not i["dup_is_true"] else f"#{i['dup_true']}" if i["dup_true"] else "yes"
+        per.append(
+            f'<tr><td><a href="https://github.com/{esc(owner_repo)}/issues/{esc(number)}">{esc(i["ref"])}</a></td>'
+            f"<td>{esc(i['kind_true'] or '')}</td><td>{esc(i['kind_pred'] or '')}</td>"
+            f"<td>{esc(dup)}</td><td>{esc('#' + str(i['dup_pred']) if i['dup_pred'] else '')}</td>"
+            f"<td>{esc(i['repro'] or '')}</td><td class=mono>{esc(i['pinned'] or '')}</td><td>{'yes' if i['fixed'] else 'no'}</td>"
+            f"<td class=mono>${(i['cost_usd'] or 0):.5f}</td><td class=mono>{esc(i['wall_s'])}</td></tr>"
+        )
+    settled = c.get("otari_settled")
+    cost_line = (
+        f"${c['total_usd_reported']:.4f} in total, median ${c['per_issue_usd']['median']:.6f} per issue, {c['sandbox_runs']} sandbox runs"
+        + (f"; Otari settled ${settled['settled_usd']:.4f} for the same {settled['request_ids']} request ids" if settled else "")
+    )
+    return f"""
+<h1>Evaluation</h1>
+<p class="muted">{res['issues']} closed public issues ({esc(', '.join(f'{r} {n}' for r, n in res['repos'].items()))}), opened in 2025 or later.
+Triagewell saw each one as if it had just been opened: no labels, no comments, no state, and a duplicate search limited to older issues.
+Its answers are scored against what the maintainers did.</p>
+<div class="card"><h2>Scores</h2>{caveat}<div class="tablewrap"><table><tbody>{summary}</tbody></table></div></div>
+<div class="card"><h2>Cost and latency, from Otari</h2><div class="kv">
+<div class="muted">Cost</div><div class="mono">{esc(cost_line)}</div>
+<div class="muted">Per issue</div><div class="mono">median {esc(c['wall_s']['median'])} s, p90 {esc(c['wall_s']['p90'])} s</div>
+<div class="muted">Otari time by role</div><div class="mono">{esc(', '.join(f'{r} {v} ms' for r, v in c['otari_duration_ms_median'].items()))}</div>
+<div class="muted">Routing</div><div class="mono">{esc(c['calls'])} calls, {esc(c['fallback_calls'])} by a fallback provider, {esc(c['mcp_calls_completed'])} MCP calls</div>
+<div class="muted">Sandbox outcomes</div><div class="mono">{esc(rp['outcomes'])}</div></div></div>
+<div class="card"><h2>Every issue</h2><div class="tablewrap"><table><thead><tr><th>Issue</th><th>Kind (maintainer)</th><th>Kind (Triagewell)</th>
+<th>Duplicate of (maintainer)</th><th>Duplicate of (Triagewell)</th><th>Sandbox</th><th>Pinned</th><th>Fix merged</th><th>Cost</th><th>Seconds</th></tr></thead>
+<tbody>{''.join(per)}</tbody></table></div></div>
+"""

@@ -1,0 +1,703 @@
+{
+ "pydantic/pydantic#12532": {
+  "labels": [
+   "feature request"
+  ],
+  "kind": "feature",
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-17T10:50:15Z",
+  "duplicate_of_source": "none found"
+ },
+ "pydantic/pydantic#12544": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   315
+  ],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-19T04:45:39Z",
+  "duplicate_of_source": "none found"
+ },
+ "pydantic/pydantic#12546": {
+  "labels": [],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": 10032,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-19T12:54:46Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pydantic/pydantic#12559": {
+  "labels": [
+   "feature request"
+  ],
+  "kind": "feature",
+  "duplicate": true,
+  "duplicate_of": 10042,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-21T13:10:58Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pydantic/pydantic#12564": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-22T21:15:07Z",
+  "duplicate_of_source": "none found"
+ },
+ "pydantic/pydantic#12578": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": 6718,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-11-25T23:51:01Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pydantic/pydantic#12597": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-12-02T07:54:21Z",
+  "duplicate_of_source": "none found"
+ },
+ "pydantic/pydantic#12602": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": 12046,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-12-09T10:05:27Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pydantic/pydantic#12619": {
+  "labels": [
+   "topic-generics"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": 11363,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-12-10T09:35:25Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pydantic/pydantic#12691": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2026-01-11T12:59:09Z",
+  "duplicate_of_source": "none found"
+ },
+ "pydantic/pydantic#12503": {
+  "labels": [
+   "bug V2",
+   "topic-enums"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   12506
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-11T13:03:44Z"
+ },
+ "pydantic/pydantic#12505": {
+  "labels": [
+   "bug V2"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   12513
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-11T13:04:00Z"
+ },
+ "pydantic/pydantic#12514": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   12520
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-17T15:41:56Z"
+ },
+ "pydantic/pydantic#12521": {
+  "labels": [
+   "bug V2"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   12522
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-11T22:56:15Z"
+ },
+ "pydantic/pydantic#12529": {
+  "labels": [
+   "feature request",
+   "topic-namedtuple"
+  ],
+  "kind": "feature",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   13505
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2026-08-05T10:48:16Z"
+ },
+ "pydantic/pydantic#12512": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-10T19:45:09Z"
+ },
+ "pydantic/pydantic#12515": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-11T11:16:41Z"
+ },
+ "pydantic/pydantic#12530": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-13T06:05:58Z"
+ },
+ "pydantic/pydantic#12542": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-24T13:10:34Z"
+ },
+ "pydantic/pydantic#12527": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-13T01:26:54Z"
+ },
+ "pydantic/pydantic#12528": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-13T00:50:23Z"
+ },
+ "pydantic/pydantic#12585": {
+  "labels": [
+   "bug V2",
+   "pending"
+  ],
+  "kind": "bug",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-11-28T14:17:00Z"
+ },
+ "pallets/click#2871": {
+  "labels": [
+   "parsing"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": 2676,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-03-23T14:07:43Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pallets/click#2872": {
+  "labels": [
+   "invalid"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-03-24T12:53:15Z",
+  "duplicate_of_source": "none found"
+ },
+ "pallets/click#2876": {
+  "labels": [
+   "invalid"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": 2868,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-04-01T15:02:38Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "pallets/click#2910": {
+  "labels": [
+   "invalid"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-05-12T13:54:30Z",
+  "duplicate_of_source": "none found"
+ },
+ "pallets/click#2865": {
+  "labels": [
+   "test runner"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   3244,
+   3391
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2026-04-16T08:19:55Z"
+ },
+ "pallets/click#2869": {
+  "labels": [
+   "prompt",
+   "typing"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   3781
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2026-08-20T02:50:21Z"
+ },
+ "pallets/click#2939": {
+  "labels": [
+   "test runner"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   2940
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-09-13T04:36:17Z"
+ },
+ "pallets/click#2971": {
+  "labels": [
+   "help output"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   2972
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-07-23T04:30:14Z"
+ },
+ "pallets/click#2867": {
+  "labels": [
+   "parsing"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-03-08T13:20:54Z"
+ },
+ "pallets/click#2874": {
+  "labels": [
+   "test runner"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-03-27T09:31:27Z"
+ },
+ "pallets/click#2897": {
+  "labels": [
+   "parsing"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-20T14:56:22Z"
+ },
+ "pallets/click#2906": {
+  "labels": [
+   "shell completion"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-20T20:14:47Z"
+ },
+ "mozilla-ai/any-llm#472": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   476
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-09-19T08:44:11Z"
+ },
+ "mozilla-ai/any-llm#494": {
+  "labels": [
+   "documentation"
+  ],
+  "kind": "docs",
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   495
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-09-29T15:45:40Z"
+ },
+ "mozilla-ai/any-llm#543": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   544
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-10-16T09:11:13Z"
+ },
+ "mozilla-ai/any-llm#644": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   651
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-12-04T11:51:10Z"
+ },
+ "mozilla-ai/any-llm#646": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   648
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-12-02T09:52:02Z"
+ },
+ "mozilla-ai/any-llm#575": {
+  "labels": [
+   "discussion"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2026-01-13T21:20:52Z"
+ },
+ "mozilla-ai/any-llm#619": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-11-10T15:40:38Z"
+ },
+ "mozilla-ai/any-agent#364": {
+  "labels": [],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": 354,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-05-28T12:06:18Z",
+  "duplicate_of_source": "maintainer comment"
+ },
+ "mozilla-ai/any-agent#708": {
+  "labels": [
+   "Stale"
+  ],
+  "kind": null,
+  "duplicate": true,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "DUPLICATE",
+  "closed_at": "2025-09-06T10:21:30Z",
+  "duplicate_of_source": "none found"
+ },
+ "mozilla-ai/any-agent#148": {
+  "labels": [
+   "serving"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   210
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-09T17:05:27Z"
+ },
+ "mozilla-ai/any-agent#176": {
+  "labels": [
+   "config"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   213
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-07T09:31:36Z"
+ },
+ "mozilla-ai/any-agent#279": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   283
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-19T17:00:00Z"
+ },
+ "mozilla-ai/any-agent#164": {
+  "labels": [
+   "tools"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "NOT_PLANNED",
+  "closed_at": "2025-04-28T08:52:16Z"
+ },
+ "mozilla-ai/any-agent#231": {
+  "labels": [
+   "serving"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-05-28T07:17:13Z"
+ },
+ "Textualize/rich#3644": {
+  "labels": [
+   "Needs triage"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   3783
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-06-24T12:48:30Z"
+ },
+ "Textualize/rich#3682": {
+  "labels": [
+   "Needs triage"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   3772
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-06-19T14:39:20Z"
+ },
+ "Textualize/rich#3706": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": true,
+  "fixed_by": [
+   3775
+  ],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-06-19T19:44:54Z"
+ },
+ "Textualize/rich#3641": {
+  "labels": [
+   "Needs triage"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2026-01-23T16:31:06Z"
+ },
+ "Textualize/rich#3657": {
+  "labels": [],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-03-30T11:30:56Z"
+ },
+ "Textualize/rich#3672": {
+  "labels": [
+   "Needs triage"
+  ],
+  "kind": null,
+  "duplicate": false,
+  "duplicate_of": null,
+  "fixed": false,
+  "fixed_by": [],
+  "state_reason": "COMPLETED",
+  "closed_at": "2025-03-21T15:07:10Z"
+ }
+}

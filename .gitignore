@@ -13,3 +13,4 @@ build/
 .otari-src/
 dev/otari-local.db*
 *-PRIVATE.md
+eval/home/
