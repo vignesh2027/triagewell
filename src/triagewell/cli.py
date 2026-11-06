@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from .config import load_settings
-from .gateway import GatewayError, OtariClient
+from .gateway import GatewayError, OtariClient, UnknownModel
 from .github import GitHubReader, load_issue_file, parse_ref
 from .ledger import Ledger
 from .outbox import PostRefused, post_github, write_local
@@ -103,6 +103,9 @@ def cmd_budget(args: argparse.Namespace) -> int:
     print(f"Local ledger for {args.maintainer}: ${allowance.spent_today:.6f} of ${allowance.daily_limit:.2f} today, ${allowance.remaining:.6f} left.")
     try:
         gateway = OtariClient(settings.otari_base_url, settings.otari_api_key, timeout=settings.timeout_s)
+        if not gateway.is_service_key():
+            print("Otari keeps no record per maintainer for this key: it is not a service key (see SETUP-OTARI.md).")
+            return 0
         record = gateway.end_user(args.maintainer)
     except (GatewayError, ValueError) as exc:
         print(f"Otari end-user record unavailable: {exc}")
@@ -128,10 +131,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if not settings.otari_api_key:
         return 1
     gateway = OtariClient(settings.otari_base_url, settings.otari_api_key, timeout=settings.timeout_s)
+    todo: list[str] = []
     try:
         for tool in gateway.tools():
             name = tool.get("id") or tool.get("name") or tool.get("type")
             print(f"  tool {name}: available={tool.get('available')} {tool.get('reason') or ''}".rstrip())
+            if tool.get("available") is False and name in {"otari_web_fetch", "otari_code_execution"}:
+                todo.append(f"turn on {name} for the workspace (dashboard: workspace, Tools)")
     except GatewayError as exc:
         print(f"Could not list tools: {exc}")
         return 1
@@ -141,6 +147,45 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"  guardrail profiles: {', '.join(names) if names else 'none'} (service available={profiles.get('available')})")
     except GatewayError as exc:
         print(f"  guardrail profiles: unreadable ({exc.status})")
+    service = gateway.is_service_key()
+    print(f"  service key: {'yes, each maintainer is an Otari end user' if service else 'no, per-maintainer budgets are off'}")
+    if not service:
+        todo.append("make the key a service key with end-user budgets (dashboard: workspace, API Keys)")
+
+    # One tiny call per role (well under $0.001 in all) shows what really serves it.
+    probe = [{"role": "user", "content": "Reply with the single word ok."}]
+    roles = [settings.sorter, settings.investigator] + ([settings.screen] if settings.screen else [])
+    for role in roles:
+        model = role.model
+        guard = [{"profile": settings.injection_profile, "mode": "monitor"}] if role is settings.sorter and settings.injection_profile else None
+        try:
+            try:
+                result = gateway.chat(model, probe, max_tokens=256, reasoning_effort=role.reasoning_effort, guardrails=guard, temperature=None, metadata={"app": "triagewell", "role": "doctor"})
+            except UnknownModel:
+                if not role.fallback:
+                    raise
+                todo.append(f"create the routing policy '{model}' (dashboard: workspace, Routing)")
+                print(f"  {role.name}: policy '{model}' not found, trying '{role.fallback}'")
+                model = role.fallback
+                result = gateway.chat(model, probe, max_tokens=256, reasoning_effort=role.reasoning_effort, guardrails=guard, temperature=None, metadata={"app": "triagewell", "role": "doctor"})
+        except GatewayError as exc:
+            print(f"  {role.name}: {model} FAILED {exc.status} {exc.detail[:160]}")
+            todo.append(f"fix the {role.name} model '{model}'")
+            continue
+        fb = " (fallback)" if result.fallback else ""
+        answer = result.content.strip()[:20] or "(empty: raise max_tokens or lower reasoning)"
+        print(f"  {role.name}: {model} served by {result.provider}:{result.model_served}{fb}, {answer!r}, ${result.cost_usd:.6f}, request {result.request_id}")
+        for g in result.guardrails:
+            print(f"  guardrail {g.get('profile')}: status={g.get('status')} {g.get('reason') or ''}".rstrip())
+            if g.get("status") == "unavailable":
+                todo.append("mandate a prompt-injection guardrail on the organization (dashboard: Organization, Guardrails)")
+    gateway.close()
+    if todo:
+        print("Still to do on otari.ai:")
+        for item in dict.fromkeys(todo):
+            print(f"  - {item}")
+    else:
+        print("Everything Triagewell uses is set up.")
     return 0
 
 

@@ -56,7 +56,8 @@ def test_report_records_routing_and_cost(tmp_path, clients, fake_gateway):
     assert by_role["investigator"]["fallback"] is True
     assert by_role["investigator"]["attempts"] == 2
     assert by_role["sorter"]["provider"] == "nebius"
-    assert report.cost_usd == round(0.00005 + 0.0009 + 0.00001, 6)
+    # Three chat calls plus the sandbox run, whose cost comes from Otari's settled record.
+    assert report.cost_usd == round(0.00005 + 0.0009 + 0.00001 + 0.01, 6)
     assert Ledger(settings.home).spent_today("alice") == report.cost_usd
     assert load_report(settings.home, report.id)["status"] == "triaged"
 
@@ -102,7 +103,8 @@ def test_budget_refusal_defers_the_issue(tmp_path, clients, fake_gateway):
     assert report.status == "deferred_budget"
     assert report.budget["otari_refusal"]["scope"] == "user"
     assert report.budget["otari_refusal"]["retry_after_s"] == 3600
-    assert report.cost_usd == 0.00005
+    # The sorter call and the sandbox run were spent before the refusal.
+    assert report.cost_usd == round(0.00005 + 0.01, 6)
 
 
 def test_local_daily_limit_stops_before_the_gateway(tmp_path, clients, fake_gateway):
@@ -168,3 +170,71 @@ def test_hold_refusal_too_small_to_retry_defers(tmp_path, clients, fake_gateway)
     fake_gateway.hold_limit_tokens = 100
     _, report = run(tmp_path, clients, investigator=make_settings(tmp_path).investigator.__class__("investigator", "triagewell-investigator", None, 900))
     assert report.status == "deferred_budget"
+
+
+def test_reasoning_effort_is_sent_per_role(tmp_path, clients, fake_gateway):
+    run(tmp_path, clients)
+    sorter, investigator, screen = fake_gateway.bodies("/chat/completions")
+    # Reasoning tokens count against max_tokens: the sorter answers without them.
+    assert sorter["reasoning_effort"] == "none"
+    assert investigator["reasoning_effort"] == "low"
+    assert "reasoning_effort" not in screen
+
+
+def test_an_ordinary_key_does_not_name_the_maintainer(tmp_path, clients, fake_gateway):
+    """otari.ai refuses `user` from a key that is not a service key; the triage must still finish."""
+    fake_gateway.service_key = False
+    _, report = run(tmp_path, clients, end_user_budget="maintainer-trial")
+    assert report.status == "triaged"
+    chats = [r for r in fake_gateway.requests if r["path"].endswith("/chat/completions")]
+    assert all("user" not in r["body"] for r in chats)
+    assert all("otari-end-user-budget" not in r["headers"] for r in chats)
+    assert {r["body"]["metadata"]["maintainer"] for r in chats} == {"alice"}
+    assert "user" not in fake_gateway.bodies("/code/execute")[0]
+    assert report.budget["otari_per_user"] is False
+    assert any("not a service key" in n for n in report.notes)
+
+
+def test_tools_the_workspace_has_not_turned_on_are_left_out(tmp_path, clients, fake_gateway):
+    fake_gateway.tools_available["otari_web_fetch"] = False
+    _, report = run(tmp_path, clients)
+    assert report.status == "triaged"
+    investigator = fake_gateway.bodies("/chat/completions")[1]
+    assert {t["type"] for t in investigator["tools"]} == {"otari_code_execution"}
+    assert investigator["mcp_servers"]
+    assert any("Skipped otari_web_fetch" in n for n in report.notes)
+
+
+def test_a_busy_model_is_retried_once(tmp_path, clients, fake_gateway):
+    from triagewell.triage import Triager
+    fake_gateway.busy_once_on = "investigator"
+    settings = make_settings(tmp_path)
+    gw, gh = clients()
+    triager = Triager(settings, gw, gh)
+    waits = []
+    triager.sleep = waits.append
+    report = triager.run(load_issue_file(FIXTURES / "pasted-token.json"), "alice")
+    assert report.status == "triaged"
+    assert waits == [2.0]
+    assert any("busy" in n for n in report.notes)
+
+
+def test_an_edge_timeout_retries_the_investigator_without_mcp(tmp_path, clients, fake_gateway):
+    fake_gateway.edge_timeout_with_mcp = True
+    _, report = run(tmp_path, clients)
+    assert report.status == "triaged"
+    investigators = [b for b in fake_gateway.bodies("/chat/completions") if b["metadata"]["role"] == "investigator"]
+    assert len(investigators) == 2
+    assert investigators[0].get("mcp_servers") and investigators[0].get("tools")
+    assert "mcp_servers" not in investigators[1] and "tools" not in investigators[1]
+    assert any("timed out (504)" in n for n in report.notes)
+    assert not any("DOCTYPE" in n for n in report.notes)
+
+
+def test_the_sandbox_cost_is_read_back_from_otari(tmp_path, clients, fake_gateway):
+    """/code/execute answers without a cost; the settled record has it."""
+    _, report = run(tmp_path, clients)
+    assert report.repro["request_id"] == "req-code"
+    assert report.repro["cost_usd"] == 0.01
+    chat_cost = 0.000050 + 0.000900 + 0.000010
+    assert abs(report.cost_usd - (0.01 + chat_cost)) < 1e-9

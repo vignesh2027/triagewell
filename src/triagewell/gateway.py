@@ -83,9 +83,19 @@ class UnknownModel(GatewayError):
     pass
 
 
+class UserMismatch(GatewayError):
+    """An ordinary (non-service) key sent a `user` that is not its own owner."""
+
+
+_USER_MISMATCH = "does not match the authenticated API key's user"
+
+
 def _error_from_response(response: httpx.Response) -> GatewayError:
     code = response.headers.get("Otari-Error-Code")
     detail = response.text
+    if detail.lstrip().startswith("<"):
+        # An HTML error page from the CDN in front of the gateway, not Otari itself.
+        detail = f"HTTP {response.status_code} from the edge in front of the gateway (no JSON body)"
     try:
         body = response.json()
         if isinstance(body, dict):
@@ -100,6 +110,8 @@ def _error_from_response(response: httpx.Response) -> GatewayError:
         cls = GuardrailBlocked
     elif code in {"invalid_model", "model_not_found"}:
         cls = UnknownModel
+    elif response.status_code == 403 and _USER_MISMATCH in detail:
+        cls = UserMismatch
     else:
         cls = GatewayError
     return cls(response.status_code, code, detail, response.headers)
@@ -136,6 +148,8 @@ class OtariClient:
         if not api_key:
             raise ValueError("OTARI_API_KEY is not set. Create a key on otari.ai and put it in .env.")
         self.base_url = base_url.rstrip("/")
+        self._service_key: bool | None = None
+        self._tool_availability: dict[str, bool] | None = None
         self._http = httpx.Client(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {api_key}", "User-Agent": "triagewell/0.1"},
@@ -163,10 +177,13 @@ class OtariClient:
         response_format: dict[str, Any] | None = None,
         metadata: dict[str, str] | None = None,
         session_label: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> GatewayResult:
         body: dict[str, Any] = {"model": model, "messages": messages, "max_tokens": max_tokens}
         if temperature is not None:
             body["temperature"] = temperature
+        if reasoning_effort:
+            body["reasoning_effort"] = reasoning_effort
         if user:
             body["user"] = user
         if tools:
@@ -228,6 +245,29 @@ class OtariClient:
             request_id=response.headers.get("Otari-Request-ID"),
         )
 
+    def settled_cost(self, request_id: str | None, *, tries: int = 3, wait_s: float = 1.5) -> float | None:
+        """The cost Otari settled for one of this key's requests, by its request id.
+
+        `/code/execute` answers without a cost, but the sandbox run is billed, so
+        the report reads the settled amount back. Rows are written in the
+        background, so a lookup right after the call can 404 for a moment."""
+        if not request_id:
+            return None
+        import time
+
+        for attempt in range(tries):
+            response = self._http.get(f"/usage/requests/{request_id}")
+            if response.status_code == 200:
+                try:
+                    return float(response.json().get("cost_usd") or 0.0)
+                except (TypeError, ValueError):
+                    return None
+            if response.status_code != 404:
+                return None
+            if attempt + 1 < tries:
+                time.sleep(wait_s)
+        return None
+
     def tools(self) -> list[dict[str, Any]]:
         response = self._http.get("/tools")
         if response.status_code >= 400:
@@ -236,6 +276,33 @@ class OtariClient:
         if isinstance(data, dict):
             return list(data.get("tools") or data.get("data") or [])
         return list(data)
+
+    def tool_availability(self) -> dict[str, bool]:
+        """Which of Otari's own tools this workspace may use, read once per client.
+
+        A request that names a tool the workspace has turned off is refused as a
+        whole (403), so callers drop those tools instead of losing the call."""
+        if self._tool_availability is None:
+            try:
+                self._tool_availability = {
+                    str(t.get("id") or t.get("name") or t.get("type")): t.get("available") is not False for t in self.tools()
+                }
+            except (GatewayError, httpx.HTTPError):
+                self._tool_availability = {}
+        return self._tool_availability
+
+    def is_service_key(self) -> bool:
+        """True unless Otari says this key is not a service key, read once per client.
+
+        Only a service key may name other people in `user`; an ordinary key that
+        does is refused with 403, so callers leave `user` out for it."""
+        if self._service_key is None:
+            try:
+                response = self._http.get("/end-user-budgets")
+                self._service_key = not (response.status_code == 403 and "service key" in response.text)
+            except httpx.HTTPError:
+                self._service_key = True
+        return self._service_key
 
     def guardrail_profiles(self) -> dict[str, Any]:
         response = self._http.get("/tool-settings/guardrails/profiles")

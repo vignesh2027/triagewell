@@ -31,6 +31,10 @@ class Role:
     model: str
     fallback: str | None
     max_tokens: int
+    # Most open-weight models in Otari's catalog reason before answering, and the
+    # reasoning counts against max_tokens. "none" makes the sorter answer at once;
+    # None sends nothing (the screen is a classifier, not a reasoning model).
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,10 @@ def load_settings(env_file: str | os.PathLike[str] | None = None) -> Settings:
         load_dotenv(Path.cwd() / ".env", override=False)
     env = os.environ
 
+    def effort(name: str, default: str) -> str | None:
+        value = env.get(name, default).strip()
+        return None if value.lower() in {"", "off", "default"} else value
+
     screen_model = env.get("TRIAGEWELL_SCREEN_MODEL", "meta/llama-guard-4-12b")
     screen = None
     if screen_model and screen_model.lower() != "off":
@@ -78,19 +86,21 @@ def load_settings(env_file: str | os.PathLike[str] | None = None) -> Settings:
     mcp_url = env.get("TRIAGEWELL_MCP_URL", "https://mcp.deepwiki.com/mcp")
 
     return Settings(
-        otari_base_url=env.get("OTARI_BASE_URL", "https://api.otari.ai/api/v1").rstrip("/"),
+        otari_base_url=env.get("OTARI_BASE_URL", "https://otari.ai/api/v1").rstrip("/"),
         otari_api_key=env.get("OTARI_API_KEY") or None,
         sorter=Role(
             "sorter",
             env.get("TRIAGEWELL_SORTER_MODEL", "triagewell-sorter"),
             env.get("TRIAGEWELL_SORTER_FALLBACK", "nvidia/nemotron-3.5-lightning-30b-a3b") or None,
             int(env.get("TRIAGEWELL_SORTER_MAX_TOKENS", "600")),
+            effort("TRIAGEWELL_SORTER_REASONING", "none"),
         ),
         investigator=Role(
             "investigator",
             env.get("TRIAGEWELL_INVESTIGATOR_MODEL", "triagewell-investigator"),
             env.get("TRIAGEWELL_INVESTIGATOR_FALLBACK", "openai/gpt-oss-120b") or None,
             int(env.get("TRIAGEWELL_INVESTIGATOR_MAX_TOKENS", "1800")),
+            effort("TRIAGEWELL_INVESTIGATOR_REASONING", "low"),
         ),
         screen=screen,
         injection_profile=None if profile.lower() == "off" else profile,
@@ -107,6 +117,6 @@ def load_settings(env_file: str | os.PathLike[str] | None = None) -> Settings:
         home=Path(env.get("TRIAGEWELL_HOME", ".triagewell")),
         code_execution=_bool(env.get("TRIAGEWELL_CODE_EXECUTION"), default=True),
         web_fetch=_bool(env.get("TRIAGEWELL_WEB_FETCH"), default=True),
-        max_tool_iterations=int(env.get("TRIAGEWELL_MAX_TOOL_ITERATIONS", "6")),
+        max_tool_iterations=int(env.get("TRIAGEWELL_MAX_TOOL_ITERATIONS", "3")),
         timeout_s=float(env.get("TRIAGEWELL_TIMEOUT_S", "120")),
     )

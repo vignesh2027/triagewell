@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -22,6 +23,8 @@ _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _URL = re.compile(r"https?://[^\s)>\]\"']+")
 _HOLD_REFUSAL = re.compile(r"has \$([0-9]+(?:\.[0-9]+)?) of budget remaining, less than this request's estimated cost of \$([0-9]+(?:\.[0-9]+)?)")
 MIN_RETRY_TOKENS = 400
+# Longest pause before the one retry after a provider says it is busy.
+MAX_BUSY_WAIT_S = 10.0
 
 
 @dataclass
@@ -162,24 +165,29 @@ class Triager:
         self.gh = github
         self.ledger = Ledger(settings.home)
         self.on_event = on_event or (lambda kind, data: None)
+        self.sleep: Callable[[float], None] = time.sleep
 
     # -- gateway helpers -------------------------------------------------
 
     def _call(self, report: Report, role: Role, messages: list[dict[str, Any]], **kwargs: Any) -> GatewayResult:
         """Call one role. If the role's routing policy does not exist on this
         workspace yet, retry once on the role's catalog model and say so."""
+        # Only a service key may name the maintainer as an Otari end user; an
+        # ordinary key that sends `user` is refused, so it goes in metadata instead.
+        per_user = self.gw.is_service_key()
         common = dict(
-            user=report.maintainer,
-            end_user_budget=self.s.end_user_budget,
+            user=report.maintainer if per_user else None,
+            end_user_budget=self.s.end_user_budget if per_user else None,
             max_tokens=role.max_tokens,
-            metadata={"app": "triagewell", "role": role.name, "repo": report.issue["repo"]},
+            reasoning_effort=role.reasoning_effort,
+            metadata={"app": "triagewell", "role": role.name, "repo": report.issue["repo"], "maintainer": report.maintainer},
             session_label=f"triagewell {report.issue['repo']}#{report.issue['number']}",
         )
         common.update(kwargs)
         self.on_event("call", {"role": role.name, "model": role.model})
         model = role.model
         try:
-            result = self.gw.chat(model, messages, **common)
+            result = self._chat_when_free(report, role, model, messages, common)
         except UnknownModel:
             if not role.fallback:
                 raise
@@ -198,9 +206,23 @@ class Triager:
 
     def _chat_within_budget(self, report: Report, role: Role, model: str, messages: list[dict[str, Any]], common: dict[str, Any]) -> GatewayResult:
         try:
-            return self.gw.chat(model, messages, **common)
+            return self._chat_when_free(report, role, model, messages, common)
         except BudgetExceeded as exc:
             return self._shrink_and_retry(report, role, model, messages, common, exc)
+
+    def _chat_when_free(self, report: Report, role: Role, model: str, messages: list[dict[str, Any]], common: dict[str, Any]) -> GatewayResult:
+        """Otari already falls back across providers; when every one of them is
+        rate limited it answers 429. One paced retry usually gets through."""
+        try:
+            return self.gw.chat(model, messages, **common)
+        except GatewayError as exc:
+            if exc.status != 429 or isinstance(exc, BudgetExceeded):
+                raise
+            hinted = exc.headers.get("Retry-After")
+            wait = min(float(hinted), MAX_BUSY_WAIT_S) if hinted and hinted.isdigit() else 3.0
+            report.notes.append(f"{role.name}: Otari said the model was busy ({exc.code}); retried once after {wait:.0f} s.")
+            self.sleep(wait)
+            return self.gw.chat(model, messages, **common)
 
     def _shrink_and_retry(
         self, report: Report, role: Role, model: str, messages: list[dict[str, Any]], common: dict[str, Any], exc: BudgetExceeded
@@ -270,6 +292,12 @@ class Triager:
         }
         if redaction.found:
             report.notes.append(f"Redacted {len(redaction.found)} secret(s) from the issue before any model saw it.")
+        if not self.gw.is_service_key():
+            report.budget["otari_per_user"] = False
+            report.notes.append(
+                "This Otari key is not a service key, so Otari keeps no budget per maintainer; "
+                "only the key's own budget and Triagewell's local ledger apply."
+            )
         issue_block = fence_untrusted("ISSUE", redaction.text)
 
         # 1. Sorter: small, fast model. Otari's prompt-injection guardrail runs on this call.
@@ -311,10 +339,17 @@ class Triager:
         # 3. Run the reporter's snippet in Otari's sandbox, with no model involved.
         snippet = extract_python(clean_body)
         if snippet and s.code_execution and not quarantined:
-            run = self.gw.execute_code(snippet, user=report.maintainer)
+            run = self.gw.execute_code(snippet, user=report.maintainer if self.gw.is_service_key() else None)
+            if not run.cost_usd:
+                # The sandbox response carries no cost; Otari's settled record does.
+                settled = self.gw.settled_cost(run.request_id)
+                if settled is not None:
+                    run.cost_usd = settled
             reproduced, verdict = judge_repro(run.stdout, run.stderr, run.return_code)
             report.repro = {
                 "via": "otari /code/execute",
+                "request_id": run.request_id,
+                "cost_usd": run.cost_usd,
                 "code": snippet,
                 "stdout": run.stdout[-2000:],
                 "stderr": run.stderr[-2000:],
@@ -352,34 +387,50 @@ class Triager:
                     }
                 ]
                 notes.append(f"the repository wiki over MCP (repoName '{issue.repo}')")
+        available = self.gw.tool_availability()
+        dropped = [t["type"] for t in tools if available.get(t["type"]) is False]
+        if dropped:
+            tools = [t for t in tools if t["type"] not in dropped]
+            notes = [n for n in notes if n.split(" ", 1)[0] not in dropped]
+            report.notes.append(f"Skipped {', '.join(dropped)}: Otari says this workspace has not turned it on.")
         dup_text = "\n".join(f"#{c.number} [{c.state}] {c.title}" for c in candidates) or "none found"
         repro_text = json.dumps({k: v for k, v in (report.repro or {}).items() if k != "code"}) if report.repro else "no snippet to run"
-        result = self._call(
-            report,
-            s.investigator,
-            [
-                {"role": "system", "content": prompts.INVESTIGATOR_SYSTEM},
-                {
-                    "role": "user",
-                    "content": prompts.investigator_user(
-                        repo=issue.repo,
-                        number=issue.number,
-                        title=issue.title,
-                        issue_block=issue_block,
-                        sort_json=json.dumps(sort, indent=1),
-                        duplicates=dup_text,
-                        repro=repro_text,
-                        quarantined=quarantined,
-                        tools_note=", ".join(notes) if notes else "none",
-                    ),
-                },
-            ],
-            tools=tools or None,
-            mcp_servers=mcp_servers,
-            mcp_server_ids=mcp_server_ids,
-            max_tool_iterations=s.max_tool_iterations if (tools or mcp_servers or mcp_server_ids) else None,
-            temperature=0.2,
-        )
+        investigator_messages = [
+            {"role": "system", "content": prompts.INVESTIGATOR_SYSTEM},
+            {
+                "role": "user",
+                "content": prompts.investigator_user(
+                    repo=issue.repo,
+                    number=issue.number,
+                    title=issue.title,
+                    issue_block=issue_block,
+                    sort_json=json.dumps(sort, indent=1),
+                    duplicates=dup_text,
+                    repro=repro_text,
+                    quarantined=quarantined,
+                    tools_note=", ".join(notes) if notes else "none",
+                ),
+            },
+        ]
+        try:
+            result = self._call(
+                report,
+                s.investigator,
+                investigator_messages,
+                tools=tools or None,
+                mcp_servers=mcp_servers,
+                mcp_server_ids=mcp_server_ids,
+                max_tool_iterations=s.max_tool_iterations if (tools or mcp_servers or mcp_server_ids) else None,
+                temperature=0.2,
+            )
+        except GatewayError as exc:
+            # The edge in front of the hosted gateway gives up on long requests,
+            # and the tool loop (wiki questions, sandbox runs) is the slow part.
+            # The reporter's snippet has already run, so answer once without tools.
+            if exc.status not in {502, 503, 504} or not (tools or mcp_servers or mcp_server_ids):
+                raise
+            report.notes.append(f"investigator: the gateway timed out ({exc.status}) during the tool loop; retried once without tools.")
+            result = self._call(report, s.investigator, investigator_messages, temperature=0.2)
         report.tool_calls = [_trim_tool_call(c) for c in result.tool_calls]
         found = parse_json_object(result.content)
         if not found:
@@ -438,6 +489,7 @@ class Triager:
         return {"verdict": verdict, "raw": text[:60], "model": result.model_served or result.model_requested}
 
     def _finish(self, report: Report) -> Report:
+        report.notes = list(dict.fromkeys(report.notes))
         report.cost_usd = round(report.cost_usd, 6)
         self.ledger.record(report.maintainer, f"{report.issue['repo']}#{report.issue['number']}", report.cost_usd, report.status, report.id)
         save_report(self.s.home, report)

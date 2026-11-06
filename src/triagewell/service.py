@@ -77,6 +77,9 @@ def budget_status(settings: Settings, maintainer: str) -> dict[str, Any]:
     try:
         gateway = OtariClient(settings.otari_base_url, settings.otari_api_key, timeout=15)
         try:
+            if not gateway.is_service_key():
+                status["otari_error"] = "this Otari key is not a service key, so Otari keeps no budget per maintainer"
+                return status
             status["otari"] = gateway.end_user(maintainer)
             if status["otari"]:
                 budget_id = status["otari"].get("budget_id")

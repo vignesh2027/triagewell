@@ -22,8 +22,8 @@ def make_settings(tmp_path: Path, **overrides: Any) -> Settings:
     base = Settings(
         otari_base_url="https://gateway.test/api/v1",
         otari_api_key="tk-test",
-        sorter=Role("sorter", "triagewell-sorter", "nvidia/nemotron-3.5-lightning-30b-a3b", 600),
-        investigator=Role("investigator", "triagewell-investigator", "openai/gpt-oss-120b", 1800),
+        sorter=Role("sorter", "triagewell-sorter", "nvidia/nemotron-3.5-lightning-30b-a3b", 600, "none"),
+        investigator=Role("investigator", "triagewell-investigator", "openai/gpt-oss-120b", 1800, "low"),
         screen=Role("screen", "meta/llama-guard-4-12b", None, 20),
         injection_profile="prompt-injection",
         injection_mode="monitor",
@@ -88,6 +88,10 @@ class FakeGateway:
         ]
         self.fallback_roles: set[str] = set()
         self.hold_limit_tokens: int | None = None
+        self.service_key = True
+        self.busy_once_on: str | None = None
+        self.edge_timeout_with_mcp = False
+        self.tools_available: dict[str, bool] = {"otari_web_fetch": True, "otari_code_execution": True}
 
     def bodies(self, path: str) -> list[dict[str, Any]]:
         return [r["body"] for r in self.requests if r["path"].endswith(path)]
@@ -101,7 +105,15 @@ class FakeGateway:
         if path.endswith("/code/execute"):
             return httpx.Response(200, json={"object": "code_execution.result", **self.code_result, "files": []}, headers={"Otari-Request-ID": "req-code"})
         if path.endswith("/tools"):
-            return httpx.Response(200, json={"object": "list", "data": [{"id": "otari_web_fetch", "available": True}]})
+            return httpx.Response(200, json={"object": "list", "data": [{"id": k, "available": v} for k, v in self.tools_available.items()]})
+        if "/usage/requests/" in path:
+            if path.endswith("/req-code"):
+                return httpx.Response(200, json={"request_id": "req-code", "status": "success", "cost_usd": "0.010000"})
+            return httpx.Response(404, json={"detail": "Request not found"})
+        if path.endswith("/end-user-budgets"):
+            if not self.service_key:
+                return httpx.Response(403, json={"detail": "This endpoint requires a service key."})
+            return httpx.Response(200, json={"data": [{"budget_id": "maintainer-daily", "max_budget": 0.25}]})
         if path.endswith("/end-users"):
             return httpx.Response(200, json={"data": [{"external_id": request.url.params.get("external_id"), "budget_id": "maintainer-daily", "spend": 0.01}]})
         return httpx.Response(404, json={"detail": "Not Found"})
@@ -109,6 +121,11 @@ class FakeGateway:
     def _chat(self, body: dict[str, Any]) -> httpx.Response:
         model = body["model"]
         role = (body.get("metadata") or {}).get("role")
+        if body.get("user") and not self.service_key:
+            return httpx.Response(403, json={"detail": "'user' field does not match the authenticated API key's user"})
+        for tool in body.get("tools") or []:
+            if self.tools_available.get(tool.get("type")) is False:
+                return httpx.Response(403, json={"detail": "web access is not enabled for this workspace"})
         if model in self.unknown_models:
             return httpx.Response(400, json={"detail": f"Unknown model {model}", "code": "invalid_model"}, headers={"Otari-Error-Code": "invalid_model"})
         if role == "investigator" and self.hold_limit_tokens and body.get("max_tokens", 0) > self.hold_limit_tokens:
@@ -117,6 +134,11 @@ class FakeGateway:
                 json={"detail": "User 'alice' has $0.000300 of budget remaining, less than this request's estimated cost of $0.000900.", "code": "budget_exceeded"},
                 headers={"Otari-Error-Code": "budget_exceeded", "Otari-Budget-Scope": "user"},
             )
+        if self.edge_timeout_with_mcp and (body.get("mcp_servers") or body.get("mcp_server_ids")):
+            return httpx.Response(504, text="<!DOCTYPE HTML><HTML><H1>504 Gateway Timeout ERROR</H1></HTML>", headers={"Content-Type": "text/html"})
+        if self.busy_once_on == role:
+            self.busy_once_on = None
+            return httpx.Response(429, json={"detail": "Model busy, retry later", "code": "upstream_rate_limited"}, headers={"Otari-Error-Code": "upstream_rate_limited", "Retry-After": "2"})
         if self.budget_refusal_on == role:
             return httpx.Response(
                 403,
