@@ -21,6 +21,7 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
             ("src/triagewell/config.py", 'env.get("TRIAGEWELL_INVESTIGATOR_MODEL", "triagewell-investigator")', "role names are policy names"),
             ("src/triagewell/gateway.py", 'fallback=h.get("Otari-Fallback", "false").lower() == "true"', "reads how the call was served"),
             ("src/triagewell/triage.py", "except UnknownModel:", "a missing policy falls back to the catalog model"),
+            ("src/triagewell/triage.py", "def _chat_when_free(", "one paced retry when every provider is busy"),
             ("dev/otari-local.yml", "budget_used_pct: {gte: 80}", "the policies, as config"),
         ],
     ),
@@ -35,17 +36,18 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ),
     (
         "Web search or web fetch",
-        "When an issue links docs, logs or a stack trace, the investigator may read them with `otari_web_fetch`. What was really fetched comes back in `otari_tool_calls`, and evidence that cites a page nobody fetched is marked unverified.",
+        "When an issue links docs, logs or a stack trace, the investigator may read them with `otari_web_fetch`. What was really fetched comes back in `otari_tool_calls`, and evidence that cites a page nobody fetched is marked unverified. A workspace that has web access off gets the triage without the tool, not a failed call.",
         [
             ("src/triagewell/triage.py", 'tools.append({"type": "otari_web_fetch"})', "declares the fetch tool"),
             ("src/triagewell/triage.py", "def ground_evidence(", "checks claims against real tool calls"),
+            ("src/triagewell/gateway.py", "def tool_availability(self)", "leaves the tool out while the workspace has it off"),
         ],
     ),
     (
         "Code execution",
         "The reporter's Python snippet runs in Otari's sandbox through `POST /code/execute` with no model in the loop, which tells the maintainer whether the bug reproduces. The investigator can also run a short check with `otari_code_execution`.",
         [
-            ("src/triagewell/triage.py", "run = self.gw.execute_code(snippet, user=report.maintainer)", "runs the snippet"),
+            ("src/triagewell/triage.py", "run = self.gw.execute_code(snippet", "runs the snippet"),
             ("src/triagewell/gateway.py", "def execute_code(", "the /code/execute client"),
             ("src/triagewell/triage.py", 'tools.append({"type": "otari_code_execution"})', "model-driven checks"),
         ],
@@ -61,16 +63,17 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ),
     (
         "Multiple models serving distinct roles",
-        "A small open-weight sorter classifies and extracts search terms, a larger open-weight investigator reasons with tools, and Llama Guard 4 screens the drafted reply.",
+        "A small open-weight sorter classifies and extracts search terms with reasoning off, a larger open-weight investigator reasons (effort low) with tools, and Llama Guard 4 screens the drafted reply.",
         [
             ("src/triagewell/config.py", "sorter=Role(", "the three roles"),
+            ("src/triagewell/config.py", 'effort("TRIAGEWELL_SORTER_REASONING", "none")', "reasoning effort per role"),
             ("src/triagewell/triage.py", "sort_result = self._call(", "sorter call"),
             ("src/triagewell/triage.py", "def _screen(", "reply screen"),
         ],
     ),
     (
         "Guardrails",
-        "The sorter call carries Otari's `prompt-injection` guardrail and Triagewell reads its verdict from the `Otari-Guardrails` header. A flagged issue is quarantined: no tools, no sandbox, no reply. Secrets are redacted before any model sees the issue, and the reply is checked again on the way out.",
+        "The sorter call carries Otari's `prompt-injection` guardrail and Triagewell reads its verdict from the `Otari-Guardrails` header. A flagged issue is quarantined: no tools, no sandbox, no reply. Secrets are redacted before any model sees the issue, and the reply is checked again on the way out. On otari.ai the header reads `status: unavailable` until the organization mandates a guardrail, and Triagewell's own checks still quarantine.",
         [
             ("src/triagewell/triage.py", 'guardrails = [{"profile": s.injection_profile, "mode": s.injection_mode}]', "requests the guardrail"),
             ("src/triagewell/gateway.py", "def guardrail_flagged(self) -> bool:", "reads the verdict"),
@@ -79,8 +82,9 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ),
     (
         "Per-user budgets",
-        "Triagewell calls Otari with a service key and names the maintainer on every request, so each maintainer is an Otari end user with a daily budget of their own. A new maintainer can start on a trial budget, and the dashboard shows Otari's own record of their spend.",
+        "With a service key, Triagewell names the maintainer on every request, so each maintainer is an Otari end user with a daily budget of their own; a new maintainer can start on a trial budget, and the dashboard shows Otari's own record of their spend. It checks the key first, because otari.ai refuses `user` from an ordinary key.",
         [
+            ("src/triagewell/triage.py", "per_user = self.gw.is_service_key()", "names the maintainer only with a service key"),
             ("src/triagewell/gateway.py", 'body["user"] = user', "names the maintainer"),
             ("src/triagewell/gateway.py", 'headers["Otari-End-User-Budget"] = end_user_budget', "picks a new maintainer's budget"),
             ("src/triagewell/service.py", 'status["otari"] = gateway.end_user(maintainer)', "reads Otari's end-user record"),
