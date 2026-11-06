@@ -45,11 +45,13 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ),
     (
         "Code execution",
-        "The reporter's Python snippet runs in Otari's sandbox through `POST /code/execute` with no model in the loop, which tells the maintainer whether the bug reproduces. The investigator can also run a short check with `otari_code_execution`.",
+        "The reporter's Python snippet is replayed in Otari's sandbox through `POST /code/execute`, with no model in the loop, against the release the reporter had: the version they state, or the newest PyPI release before the issue was opened. The verdict is strict: reproduced only if the error the report names shows up, refuted only if the report names an error and the snippet runs cleanly, otherwise inconclusive. The settled sandbox charge is read back from Otari's usage API.",
         [
-            ("src/triagewell/triage.py", "run = self.gw.execute_code(snippet", "runs the snippet"),
-            ("src/triagewell/gateway.py", "def execute_code(", "the /code/execute client"),
-            ("src/triagewell/triage.py", 'tools.append({"type": "otari_code_execution"})', "model-driven checks"),
+            ("src/triagewell/replay.py", "def choose_pin(", "picks the reporter's release"),
+            ("src/triagewell/replay.py", "def sandbox_program(", "installs it and runs the snippet in a fresh interpreter"),
+            ("src/triagewell/triage.py", "run = self.gw.execute_code(program", "sends it to the sandbox"),
+            ("src/triagewell/triage.py", "def judge_repro(", "the strict verdict"),
+            ("src/triagewell/gateway.py", "def settled_cost(", "reads the settled charge back"),
         ],
     ),
     (

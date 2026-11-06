@@ -57,3 +57,8 @@ hesitate is the small rough edges above, not the design.
   error has no `code`, so a client has to match the sentence.
 * The hosted gateway has no guardrails service, so `prompt-injection` comes back
   `unavailable`, and every guardrail in the hosted catalog needs a third-party key.
+* The evaluation sent 41 issue snippets to `/code/execute`. 7 got an HTML 403 from the
+  AWS load balancer (no request id, no JSON), and 2 timed out at the edge. That was the
+  biggest single reason the sandbox gave no verdict, more than missing packages.
+* Cost tracking held up: for 194 request ids, Triagewell's own sum and Otari's settled
+  records agreed to the sixth decimal.
