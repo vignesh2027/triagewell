@@ -36,9 +36,10 @@ FEATURES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ),
     (
         "Web search or web fetch",
-        "When an issue links docs, logs or a stack trace, the investigator may read them with `otari_web_fetch`. What was really fetched comes back in `otari_tool_calls`, and evidence that cites a page nobody fetched is marked unverified. A workspace that has web access off gets the triage without the tool, not a failed call.",
+        "When an issue links docs, logs or a stack trace, Triagewell reads the first linked page through Otari's fetch tool (`POST /fetch`, no model deciding) and hands it to the investigator fenced as untrusted; the investigator may fetch more with `otari_web_fetch`. Every fetch is recorded with its request id and settled cost, and evidence that cites a page nobody fetched is marked unverified. A workspace that has web access off gets the triage without fetching, not a failed call.",
         [
-            ("src/triagewell/triage.py", 'tools.append({"type": "otari_web_fetch"})', "declares the fetch tool"),
+            ("src/triagewell/gateway.py", "def fetch(self, url: str", "reads a linked page through POST /fetch"),
+            ("src/triagewell/triage.py", 'tools.append({"type": "otari_web_fetch"})', "offers the fetch tool to the investigator"),
             ("src/triagewell/triage.py", "def ground_evidence(", "checks claims against real tool calls"),
             ("src/triagewell/gateway.py", "def tool_availability(self)", "leaves the tool out while the workspace has it off"),
         ],

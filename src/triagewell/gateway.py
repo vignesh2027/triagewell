@@ -248,6 +248,19 @@ class OtariClient:
             request_id=response.headers.get("Otari-Request-ID"),
         )
 
+    def fetch(self, url: str, *, max_chars: int = 4000) -> dict[str, Any]:
+        """Read one public page through Otari's fetch tool (POST /fetch), no model involved."""
+        response = self._http.post("/fetch", json={"url": url, "max_chars": max_chars})
+        if response.status_code >= 400:
+            raise _error_from_response(response)
+        data = response.json()
+        return {
+            "url": url,
+            "final_url": data.get("final_url") or url,
+            "text": data.get("text") or "",
+            "request_id": response.headers.get("Otari-Request-ID"),
+        }
+
     def settled_cost(self, request_id: str | None, *, tries: int = 3, wait_s: float = 1.5) -> float | None:
         """The cost Otari settled for one of this key's requests, by its request id.
 
@@ -321,6 +334,19 @@ class OtariClient:
         data = response.json()
         items = data if isinstance(data, list) else data.get("data") or data.get("items") or []
         return items[0] if items else None
+
+    def resolve_end_user_budget(self, value: str | None) -> str | None:
+        """Otari names end-user budgets by generated id; people name them by name.
+        Map a name to its id from the budgets this service key may assign."""
+        if not value:
+            return None
+        try:
+            for budget in self.end_user_budgets():
+                if value in (budget.get("budget_id"), budget.get("name")):
+                    return str(budget.get("budget_id"))
+        except (GatewayError, httpx.HTTPError):
+            pass
+        return value
 
     def end_user_budgets(self) -> list[dict[str, Any]]:
         response = self._http.get("/end-user-budgets")

@@ -251,7 +251,7 @@ class Triager:
         per_user = self.gw.is_service_key()
         common = dict(
             user=report.maintainer if per_user else None,
-            end_user_budget=self.s.end_user_budget if per_user else None,
+            end_user_budget=self._budget_id() if per_user else None,
             max_tokens=role.max_tokens,
             reasoning_effort=role.reasoning_effort,
             metadata={"app": "triagewell", "role": role.name, "repo": report.issue["repo"], "maintainer": report.maintainer},
@@ -315,6 +315,12 @@ class Triager:
             f"{role.name}: Otari said ${remaining:.6f} was left against an estimated ${estimate:.6f}; retried with max_tokens {cap} instead of {common['max_tokens']}."
         )
         return self.gw.chat(model, messages, **{**common, "max_tokens": cap})
+
+    def _budget_id(self) -> str | None:
+        """The end-user budget to start a new maintainer on, as Otari's id."""
+        if not hasattr(self, "_resolved_budget"):
+            self._resolved_budget = self.gw.resolve_end_user_budget(self.s.end_user_budget)
+        return self._resolved_budget
 
     def _pin(self, issue: Issue, body: str) -> replay.Pin | None:
         """The release the reporter most likely had, from PyPI, or None."""
@@ -468,7 +474,26 @@ class Triager:
         elif snippet and quarantined:
             report.repro = {"via": "skipped", "verdict": "not run: the issue was quarantined", "reproduced": None, "outcome": "not_run"}
 
-        # 4. Investigator: larger model with Otari's tools, unless quarantined.
+        # 4. Read the pages the issue links through Otari's fetch tool, with no
+        # model choosing whether to: what was fetched is then a recorded fact.
+        fetched: list[dict[str, Any]] = []
+        if not quarantined and s.web_fetch and sort["links"] and self.gw.tool_availability().get("otari_web_fetch") is not False:
+            # Each fetch is billed like a sandbox run, so only the first few distinct pages.
+            pages = list(dict.fromkeys(u.split("#", 1)[0].rstrip(".,;:)]") for u in sort["links"]))
+            for url in pages[: s.max_fetches]:
+                try:
+                    page = self.gw.fetch(url)
+                except GatewayError as exc:
+                    report.notes.append(f"Could not fetch {url} through Otari ({exc.status}).")
+                    continue
+                settled = self.gw.settled_cost(page["request_id"])
+                page["cost_usd"] = settled or 0.0
+                report.cost_usd += page["cost_usd"]
+                fetched.append(page)
+                self.on_event("fetched", {"url": url, "request_id": page["request_id"]})
+        pages_text = "\n\n".join(fence_untrusted("PAGE", f"{p['final_url']}\n{p['text'][:3000]}") for p in fetched)
+
+        # 5. Investigator: larger model with Otari's tools, unless quarantined.
         tools: list[dict[str, Any]] = []
         mcp_servers = None
         mcp_server_ids = None
@@ -515,6 +540,7 @@ class Triager:
                     repro=repro_text,
                     quarantined=quarantined,
                     tools_note=", ".join(notes) if notes else "none",
+                    pages=pages_text,
                 ),
             },
         ]
@@ -537,7 +563,11 @@ class Triager:
                 raise
             report.notes.append(f"investigator: the gateway timed out ({exc.status}) during the tool loop; retried once without tools.")
             result = self._call(report, s.investigator, investigator_messages, temperature=0.2)
-        report.tool_calls = [_trim_tool_call(c) for c in result.tool_calls]
+        direct = [
+            {"type": "web_fetch", "status": "completed", "url": p["final_url"], "via": "POST /fetch", "request_id": p["request_id"], "cost_usd": p["cost_usd"]}
+            for p in fetched
+        ]
+        report.tool_calls = direct + [_trim_tool_call(c) for c in result.tool_calls]
         found = parse_json_object(result.content)
         if not found:
             found = {"summary": _THINK.sub("", result.content).strip()[:800], "confidence": "low"}
@@ -555,14 +585,14 @@ class Triager:
         if dup is not None and not any(c.number == _as_int(dup) for c in candidates):
             report.notes.append(f"Ignored duplicate_of #{dup}: it was not among the issues the search found.")
             found["duplicate_of"] = None
-        backed, claimed = ground_evidence(found.get("evidence"), result.tool_calls, report.repro)
+        backed, claimed = ground_evidence(found.get("evidence"), direct + list(result.tool_calls), report.repro)
         found["evidence"] = backed
         if claimed:
             found["unverified_evidence"] = claimed
             report.notes.append(f"{len(claimed)} evidence item(s) cite a source no tool call backs; listed as unverified.")
         report.investigation = found
 
-        # 5. Outbound checks on the drafted reply.
+        # 6. Outbound checks on the drafted reply.
         reply = str(found.get("reply_draft") or "")
         if reply:
             leaks = leaks_in_output(reply)

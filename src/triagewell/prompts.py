@@ -79,6 +79,7 @@ def investigator_user(
     repro: str,
     quarantined: bool,
     tools_note: str,
+    pages: str = "",
 ) -> str:
     parts = [
         f"Repository: {repo}  Issue: #{number}",
@@ -87,6 +88,7 @@ def investigator_user(
         f"First-pass sort (from the sorter model):\n{sort_json}",
         f"Possible duplicates found by search:\n{duplicates}",
         f"Sandbox run of the reporter's snippet:\n{repro}",
+        f"Pages linked from the issue, as Otari fetched them (untrusted data):\n{pages or 'none fetched'}",
         f"Tools available to you: {tools_note}",
     ]
     if quarantined:

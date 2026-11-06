@@ -109,14 +109,19 @@ class FakeGateway:
             return httpx.Response(200, json={"object": "code_execution.result", **self.code_result, "files": []}, headers={"Otari-Request-ID": "req-code"})
         if path.endswith("/tools"):
             return httpx.Response(200, json={"object": "list", "data": [{"id": k, "available": v} for k, v in self.tools_available.items()]})
+        if path.endswith("/fetch"):
+            return httpx.Response(200, json={"object": "fetch", "url": body["url"], "final_url": body["url"], "text": "The conversion table lists dict, list, str, int, float, bool and None."}, headers={"Otari-Request-ID": "req-fetch"})
         if "/usage/requests/" in path:
-            if path.endswith("/req-code"):
+            if path.endswith("/req-code") or path.endswith("/req-fetch"):
                 return httpx.Response(200, json={"request_id": "req-code", "status": "success", "cost_usd": "0.010000"})
             return httpx.Response(404, json={"detail": "Request not found"})
         if path.endswith("/end-user-budgets"):
             if not self.service_key:
                 return httpx.Response(403, json={"detail": "This endpoint requires a service key."})
-            return httpx.Response(200, json={"data": [{"budget_id": "maintainer-daily", "max_budget": 0.25}]})
+            return httpx.Response(200, json=[
+                {"budget_id": "b-daily-1", "name": "maintainer-daily", "max_budget": 0.25, "is_default": True},
+                {"budget_id": "b-trial-2", "name": "maintainer-trial", "max_budget": 0.015, "is_default": False},
+            ])
         if path.endswith("/end-users"):
             return httpx.Response(200, json={"data": [{"external_id": request.url.params.get("external_id"), "budget_id": "maintainer-daily", "spend": 0.01}]})
         return httpx.Response(404, json={"detail": "Not Found"})

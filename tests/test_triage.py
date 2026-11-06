@@ -56,8 +56,8 @@ def test_report_records_routing_and_cost(tmp_path, clients, fake_gateway):
     assert by_role["investigator"]["fallback"] is True
     assert by_role["investigator"]["attempts"] == 2
     assert by_role["sorter"]["provider"] == "nebius"
-    # Three chat calls plus the sandbox run, whose cost comes from Otari's settled record.
-    assert report.cost_usd == round(0.00005 + 0.0009 + 0.00001 + 0.01, 6)
+    # Three chat calls plus the sandbox run and the page fetch, whose costs come from Otari's settled records.
+    assert report.cost_usd == round(0.00005 + 0.0009 + 0.00001 + 0.01 + 0.01, 6)
     assert Ledger(settings.home).spent_today("alice") == report.cost_usd
     assert load_report(settings.home, report.id)["status"] == "triaged"
 
@@ -103,8 +103,8 @@ def test_budget_refusal_defers_the_issue(tmp_path, clients, fake_gateway):
     assert report.status == "deferred_budget"
     assert report.budget["otari_refusal"]["scope"] == "user"
     assert report.budget["otari_refusal"]["retry_after_s"] == 3600
-    # The sorter call and the sandbox run were spent before the refusal.
-    assert report.cost_usd == round(0.00005 + 0.01, 6)
+    # The sorter call, the sandbox run and the page fetch were spent before the refusal.
+    assert report.cost_usd == round(0.00005 + 0.01 + 0.01, 6)
 
 
 def test_local_daily_limit_stops_before_the_gateway(tmp_path, clients, fake_gateway):
@@ -237,7 +237,8 @@ def test_the_sandbox_cost_is_read_back_from_otari(tmp_path, clients, fake_gatewa
     assert report.repro["request_id"] == "req-code"
     assert report.repro["cost_usd"] == 0.01
     chat_cost = 0.000050 + 0.000900 + 0.000010
-    assert abs(report.cost_usd - (0.01 + chat_cost)) < 1e-9
+    fetch_cost = 0.01
+    assert abs(report.cost_usd - (0.01 + fetch_cost + chat_cost)) < 1e-9
 
 
 def test_a_sandbox_timeout_costs_the_verdict_not_the_triage(tmp_path, clients, fake_gateway):
@@ -247,3 +248,42 @@ def test_a_sandbox_timeout_costs_the_verdict_not_the_triage(tmp_path, clients, f
     assert report.repro["outcome"] == "not_run"
     assert any("timed out at the gateway edge" in n for n in report.notes)
     assert "timed out" in report.repro["verdict"]
+
+
+def test_a_budget_named_by_name_is_sent_as_its_otari_id(tmp_path, clients, fake_gateway):
+    run(tmp_path, clients, end_user_budget="maintainer-trial")
+    chats = [r for r in fake_gateway.requests if r["path"].endswith("/chat/completions")]
+    assert {r["headers"].get("otari-end-user-budget") for r in chats} == {"b-trial-2"}
+
+
+def test_linked_pages_are_fetched_through_otari_and_count_as_evidence(tmp_path, clients, fake_gateway):
+    _, report = run(tmp_path, clients)
+    fetches = fake_gateway.bodies("/fetch")
+    # One page by default, the first the issue links.
+    assert [f["url"] for f in fetches] == ["https://docs.python.org/3/library/json.html"]
+    direct = [t for t in report.tool_calls if t.get("via") == "POST /fetch"]
+    assert direct and direct[0]["request_id"] == "req-fetch"
+    investigator = fake_gateway.bodies("/chat/completions")[1]
+    assert "conversion table lists dict" in investigator["messages"][1]["content"]
+    assert "UNTRUSTED" in investigator["messages"][1]["content"].upper()
+
+
+def test_no_fetch_when_the_workspace_has_web_access_off(tmp_path, clients, fake_gateway):
+    fake_gateway.tools_available["otari_web_fetch"] = False
+    run(tmp_path, clients)
+    assert fake_gateway.bodies("/fetch") == []
+
+
+def test_a_quarantined_issue_fetches_nothing(tmp_path, clients, fake_gateway):
+    run(tmp_path, clients, fixture="prompt-injection.json")
+    assert fake_gateway.bodies("/fetch") == []
+
+
+def test_fetched_pages_are_deduplicated_and_their_cost_counted(tmp_path, clients, fake_gateway):
+    fake_gateway.sort_reply = {**fake_gateway.sort_reply, "links": ["https://docs.python.org/3/library/json.html#encoders", "https://docs.python.org/3/library/json.html."]}
+    _, report = run(tmp_path, clients, max_fetches=3)
+    urls = [f["url"] for f in fake_gateway.bodies("/fetch")]
+    # Three spellings of one page, fetched once.
+    assert urls == ["https://docs.python.org/3/library/json.html"]
+    direct = [t for t in report.tool_calls if t.get("via") == "POST /fetch"]
+    assert [d["cost_usd"] for d in direct] == [0.01]
