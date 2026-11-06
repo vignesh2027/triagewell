@@ -71,7 +71,7 @@ def esc(value: Any) -> str:
 def page(title: str, body: str) -> HTMLResponse:
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)}</title>
-<link rel="icon" href="/assets/logo.svg" type="image/svg+xml"><style>{CSS}</style></head><body>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><style>{CSS}</style></head><body>
 <header><div class="bar"><a href="/"><img src="/assets/logo.svg" alt=""></a>
 <div><a class="brand" href="/">Triagewell</a><div class="sub">Issue triage through Otari, on open-weight models</div></div>
 <nav><a href="/">Triage</a><a href="/budgets">Budgets</a></nav></div></header>
@@ -197,7 +197,7 @@ def create_app(env_file: str | None = None, settings: Settings | None = None) ->
 
     async def asset(request: Request) -> Response:
         name = request.path_params["name"]
-        if name not in {"logo.svg", "logo-512.png"}:
+        if name not in {"logo.svg", "logo-512.png", "favicon.svg"}:
             return Response(status_code=404)
         return FileResponse(ASSETS / name)
 

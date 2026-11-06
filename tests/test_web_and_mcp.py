@@ -42,6 +42,7 @@ def test_dashboard_pages(tmp_path, clients, monkeypatch):
     assert client.get(f"/report/{report['id']}.json").json()["id"] == report["id"]
     assert "maintainer-daily" in client.get("/budgets").text
     assert client.get("/assets/logo.svg").status_code == 200
+    assert client.get("/assets/favicon.svg").status_code == 200
     assert client.get("/assets/..%2Fpyproject.toml").status_code == 404
     assert "No such report" in client.get("/report/nothing").text
 
