@@ -248,9 +248,16 @@ class OtariClient:
             request_id=response.headers.get("Otari-Request-ID"),
         )
 
-    def fetch(self, url: str, *, max_chars: int = 4000) -> dict[str, Any]:
-        """Read one public page through Otari's fetch tool (POST /fetch), no model involved."""
-        response = self._http.post("/fetch", json={"url": url, "max_chars": max_chars})
+    def fetch(self, url: str, *, max_chars: int = 4000, user: str | None = None, end_user_budget: str | None = None) -> dict[str, Any]:
+        """Read one public page through Otari's fetch tool (POST /fetch), no model involved.
+
+        With a service key, `user` bills the fetch to that end user's budget,
+        as on chat completions; without it the key's own owner pays."""
+        body: dict[str, Any] = {"url": url, "max_chars": max_chars}
+        if user:
+            body["user"] = user
+        headers = {"Otari-End-User-Budget": end_user_budget} if end_user_budget else {}
+        response = self._http.post("/fetch", json=body, headers=headers)
         if response.status_code >= 400:
             raise _error_from_response(response)
         data = response.json()

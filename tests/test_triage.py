@@ -287,3 +287,17 @@ def test_fetched_pages_are_deduplicated_and_their_cost_counted(tmp_path, clients
     assert urls == ["https://docs.python.org/3/library/json.html"]
     direct = [t for t in report.tool_calls if t.get("via") == "POST /fetch"]
     assert [d["cost_usd"] for d in direct] == [0.01]
+
+
+def test_a_fetch_is_billed_to_the_maintainer_on_a_service_key(tmp_path, clients, fake_gateway):
+    run(tmp_path, clients, end_user_budget="maintainer-trial")
+    fetch = [r for r in fake_gateway.requests if r["path"].endswith("/fetch")][0]
+    assert fetch["body"]["user"] == "alice"
+    assert fetch["headers"].get("otari-end-user-budget") == "b-trial-2"
+
+
+def test_an_ordinary_key_fetches_without_naming_anyone(tmp_path, clients, fake_gateway):
+    fake_gateway.service_key = False
+    run(tmp_path, clients)
+    fetch = [r for r in fake_gateway.requests if r["path"].endswith("/fetch")][0]
+    assert "user" not in fetch["body"]

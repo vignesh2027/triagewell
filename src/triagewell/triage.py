@@ -482,7 +482,12 @@ class Triager:
             pages = list(dict.fromkeys(u.split("#", 1)[0].rstrip(".,;:)]") for u in sort["links"]))
             for url in pages[: s.max_fetches]:
                 try:
-                    page = self.gw.fetch(url)
+                    per_user = self.gw.is_service_key()
+                    page = self.gw.fetch(
+                        url,
+                        user=report.maintainer if per_user else None,
+                        end_user_budget=self._budget_id() if per_user else None,
+                    )
                 except BudgetExceeded as exc:
                     report.notes.append(f"Otari refused to fetch {url} on budget grounds ({exc.scope} budget): {exc.detail[:160]}")
                     break
