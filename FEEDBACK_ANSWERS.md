@@ -1,64 +1,79 @@
-# Written feedback (draft, in Vignesh's voice)
+# Written feedback
 
-These answer the three written questions on the submission form. They describe
-what happened while building Triagewell; edit anything that does not match your
-own experience, and update the CHECK line after the hosted run.
+These are the answers to the three written questions on the submission form.
+Everything in them happened while building Triagewell on otari.ai between 4 and
+8 November 2026.
 
 ## When were you most tempted to skip Otari and call the provider directly? What happened?
 
-When I wanted the investigator to fetch only the pages linked in the issue. With
-Otari's own fetch tool I can't pass `max_uses` or allowed domains (the request is
-refused), so for a moment I thought about calling a provider's native fetch, or
-writing my own fetch step outside the gateway. I stayed with Otari because its
-fetch already blocks private and unsafe addresses, the result comes back in
-`otari_tool_calls` where I can check what was read, and the shared call limit
-bounds a single request anyway. Second place was the budget refusal: I wanted the
-remaining budget as a number and had to parse it out of the error text.
+When the code execution sandbox started refusing my requests. Triagewell replays
+the snippet from a bug report in Otari's sandbox, against the version of the
+package the reporter used. In my evaluation I sent 41 snippets from real closed
+issues to `POST /api/v1/code/execute`. Seven came back as an HTML 403 page from
+the AWS load balancer in front of otari.ai: no `Otari-Request-ID`, no JSON body,
+nothing my code could tell apart from a real authorization failure. The same
+snippet sent on its own ran fine. Only when I wrapped it in a short program that
+installs the package with pip and runs the snippet in a fresh interpreter was it
+refused, and only for some snippets. Two more runs timed out at the edge after
+about a minute.
 
-CHECK: if something on otari.ai itself was more tempting to route around during
-the hosted run, put it first.
+At that point running my own container, or calling a provider's code tool
+directly, looked easier. I stayed because the sandbox is the one place where
+untrusted code from a public issue runs, and I did not want that on my machine
+or my maintainers' machines. I also did not try to work out the firewall rule or
+get around it. Triagewell reports those runs as "not run, refused by the
+firewall" and I wrote the problem up for the Otari team.
+
+Second place was much smaller: when a budget refuses a request, the remaining
+amount and the estimate are only in the error sentence, so I parse them with a
+regular expression.
 
 ## What did you end up building yourself that Otari should've done for you?
 
-Three things. First, a retry that shrinks the output limit when a budget refusal
-says the hold, not the spend, is what doesn't fit. Otari already explains this in
-the refusal text, so returning the remaining amount and the estimate as fields
-would make that retry a few lines and not a regular expression. Second, a check
-that compares the model's claimed evidence against the tool calls Otari reports,
-so a page the model says it read but never fetched is marked unverified. Otari
-has the data; a flag on the response saying which cited URLs were actually
-fetched would help every agent that writes reports. Third, secret redaction
-before the issue text reaches the model. The prompt-injection guardrail checks
-whether text is trying to steer the model, but I didn't find a guardrail mode
-that removes credentials from the input and still lets the request through.
+Four things.
+
+1. Reading back what the sandbox and the fetch cost. `POST /code/execute` and
+   `POST /fetch` are each billed $0.01 but the response carries no cost, so after
+   every call Triagewell looks the request id up in `GET /usage/requests/{id}`.
+   It works: for 194 request ids my totals and Otari's settled records agreed to
+   the sixth decimal. But a `cost_usd` on the response would save a round trip
+   per call.
+2. A retry that shrinks the output limit when a budget refusal says the hold,
+   not the spend, does not fit. Otari explains this in the refusal text, so
+   returning the remaining amount and the estimate as fields would turn that
+   retry into a few lines.
+3. Retries around the edge in front of the hosted gateway. Requests with a
+   managed MCP tool loop (DeepWiki questions take about 19 seconds each) got a
+   504 after about a minute, so the investigator retries once without tools.
+   Streaming, or a longer timeout for requests that carry `mcp_servers`, would
+   remove that.
+4. A check that matches the evidence the model cites against the tool calls
+   Otari actually ran, so a page the model says it read but never fetched is
+   shown as unverified. Otari already has the data in `otari_tool_calls`. A flag
+   saying which cited URLs were really fetched would help anyone writing an
+   agent that produces reports.
+
+Smaller things I hit: Nemotron 3.5 Lightning with a 300 token limit spent all of
+it reasoning and returned empty content, which `reasoning_effort: none` fixed (a
+note in the catalog that a model reasons by default would help). An ordinary key
+that sends `user` is refused with a clear sentence but no error code. End-user
+budgets are named by a generated id, so I resolve names to ids myself. And the
+hosted gateway has no guardrails service of its own, so the `prompt-injection`
+profile always comes back `unavailable` unless the organization brings a
+third-party key.
 
 ## If the rules hadn't required Otari, would you have continued using Otari? Why or why not?
 
-Yes. The reason is per-user budgets on a service key. Triagewell acts for several
-maintainers, and giving each one their own daily budget, with a ceiling for the
-team, took a budget and a key setting rather than a billing system of my own.
-Routing policies by name also mean I can change providers without a code change,
-and I can run the same gateway myself when I need to, which matters for open-source
-projects that won't send issue data to a hosted service. What would make me
-hesitate is the small rough edges above, not the design.
+Yes. The deciding feature is per-user budgets on a service key. Triagewell acts
+for several maintainers, and on otari.ai each one is an end user with a daily
+budget of their own, under a ceiling for the whole workspace. When a new
+maintainer on a 1.5 cent trial budget ran out, Otari itself refused the next
+sandbox run and told me when the budget resets. I did not have to build any of
+that. Routing policies by name mean I can change providers without touching the
+code, the sandbox and fetch run outside my machine, and because Otari is open
+source a project that will not send issue data to a hosted service can run the
+same gateway itself.
 
-## Facts from the first hosted run (6 Nov), to fold in where they fit
-
-* The edge in front of otari.ai answered 504 after about a minute while Otari's
-  managed tool loop (DeepWiki questions take about 19 s each) was still running.
-  I added a retry without tools. Streaming, or a longer edge timeout for requests
-  that carry `mcp_servers`, would remove it.
-* `POST /code/execute` is billed $0.01 but answers with no cost; I read it back
-  from `GET /usage/requests/{id}` (otari#2864 asks for the same thing).
-* Nemotron 3.5 Lightning with `max_tokens: 300` spent every token reasoning and
-  returned empty content with `finish_reason: length`. `reasoning_effort: none`
-  fixed it; a note in the catalog that a model reasons by default would help.
-* An ordinary key that sends `user` is refused outright. Clear message, but the
-  error has no `code`, so a client has to match the sentence.
-* The hosted gateway has no guardrails service, so `prompt-injection` comes back
-  `unavailable`, and every guardrail in the hosted catalog needs a third-party key.
-* The evaluation sent 41 issue snippets to `/code/execute`. 7 got an HTML 403 from the
-  AWS load balancer (no request id, no JSON), and 2 timed out at the edge. That was the
-  biggest single reason the sandbox gave no verdict, more than missing packages.
-* Cost tracking held up: for 194 request ids, Triagewell's own sum and Otari's settled
-  records agreed to the sixth decimal.
+What would make me hesitate is the edge in front of otari.ai, not Otari: the
+firewall refusals on code execution and the one minute timeout were the only
+times the platform got in the way.

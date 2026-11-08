@@ -483,6 +483,9 @@ class Triager:
             for url in pages[: s.max_fetches]:
                 try:
                     page = self.gw.fetch(url)
+                except BudgetExceeded as exc:
+                    report.notes.append(f"Otari refused to fetch {url} on budget grounds ({exc.scope} budget): {exc.detail[:160]}")
+                    break
                 except GatewayError as exc:
                     report.notes.append(f"Could not fetch {url} through Otari ({exc.status}).")
                     continue

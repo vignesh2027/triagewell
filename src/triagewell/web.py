@@ -258,7 +258,19 @@ def render_report(report: dict[str, Any]) -> str:
     grid = []
     repro = report.get("repro")
     if repro:
-        block = f'<p>{esc(repro.get("verdict"))} <span class="muted">({esc(repro.get("via"))})</span></p>'
+        block = f'<p><b>{esc(repro.get("verdict"))}</b> <span class="muted">({esc(repro.get("via"))})</span></p>'
+        pin = repro.get("pinned")
+        facts = []
+        if pin:
+            facts.append(f'<div class="muted">Replayed against</div><div class="mono">{esc(pin.get("package"))}=={esc(pin.get("version"))} ({esc(pin.get("source"))})</div>')
+        if repro.get("added_imports"):
+            facts.append(f'<div class="muted">Imports added</div><div class="mono">{esc("; ".join(repro["added_imports"]))}</div>')
+        if repro.get("added_packages"):
+            facts.append(f'<div class="muted">Packages added</div><div class="mono">{esc(", ".join(repro["added_packages"]))}</div>')
+        if repro.get("request_id"):
+            facts.append(f'<div class="muted">Otari request</div><div class="mono">{esc(repro["request_id"])}, ${float(repro.get("cost_usd") or 0):.2f}</div>')
+        if facts:
+            block += f'<div class="kv" style="margin-bottom:10px">{"".join(facts)}</div>'
         if repro.get("code"):
             block += f"<pre>{esc(repro['code'])}</pre>"
         if repro.get("stderr") or repro.get("stdout"):
@@ -293,22 +305,25 @@ def render_report(report: dict[str, Any]) -> str:
 
     rows = "".join(
         f"<tr><td>{esc(c['role'])}</td><td class=\"mono\">{esc(c['requested'])}</td><td class=\"mono\">{esc(c.get('provider'))}:{esc(c.get('model'))}</td>"
-        f"<td>{'yes (' + esc(c.get('attempts')) + ' attempts)' if c.get('fallback') else 'no'}</td><td class=\"mono\">${c.get('cost_usd', 0):.6f}</td></tr>"
+        f"<td>{'yes (' + esc(c.get('attempts')) + ' attempts)' if c.get('fallback') else 'no'}</td><td class=\"mono\">${c.get('cost_usd', 0):.6f}</td>"
+        f"<td class=\"mono muted\">{esc((c.get('request_id') or '')[:8])}</td></tr>"
         for c in report.get("calls") or []
     )
     if rows:
         parts.append(
-            '<div class="card"><h2>Gateway calls</h2><div class="tablewrap"><table><thead><tr><th>Role</th><th>Asked for</th><th>Served by</th><th>Fallback</th><th>Cost</th></tr></thead>'
+            '<div class="card"><h2>Gateway calls</h2><div class="tablewrap"><table><thead><tr><th>Role</th><th>Asked for</th><th>Served by</th><th>Fallback</th><th>Cost</th><th>Request</th></tr></thead>'
             f"<tbody>{rows}</tbody></table></div></div>"
         )
     tools = []
     for t in report.get("tool_calls") or []:
         what = t.get("url") or (f"{t.get('server')}.{t.get('name')}" if t.get("type") == "mcp" else "") or (t.get("code") or "")[:200]
         detail = t.get("output") or t.get("stderr") or t.get("stdout") or ""
+        if t.get("via"):
+            detail = f"{t['via']}, request {(t.get('request_id') or '')[:8]}, ${float(t.get('cost_usd') or 0):.2f}"
         tools.append(f"<tr><td>{esc(t.get('type'))}</td><td>{esc(t.get('status'))}</td><td class=\"mono\">{esc(what)}</td><td class=\"muted\">{esc(str(detail)[:240])}</td></tr>")
     if tools:
         parts.append(
-            '<div class="card"><h2>Tools Otari ran (from <span class="mono">otari_tool_calls</span>)</h2><div class="tablewrap"><table><thead><tr><th>Tool</th><th>Status</th><th>Target</th><th>Result</th></tr></thead>'
+            '<div class="card"><h2>Tools Otari ran (<span class="mono">POST /fetch</span> and <span class="mono">otari_tool_calls</span>)</h2><div class="tablewrap"><table><thead><tr><th>Tool</th><th>Status</th><th>Target</th><th>Result</th></tr></thead>'
             f"<tbody>{''.join(tools)}</tbody></table></div></div>"
         )
     parts.append(f'<p class="muted">Report {esc(report["id"])}. <a href="/report/{esc(report["id"])}.json">JSON</a></p>')

@@ -66,10 +66,10 @@ def test_a_missing_import_is_added_and_reported():
     import subprocess
     import sys
 
-    program = replay.sandbox_program("logging.getLogger('x')\nx: Any = 1\nprint('fine')", None)
+    program = replay.sandbox_program("logging.getLogger('x')\nx: Any = 1\ny: TracebackType | None = None\nprint('fine')", None)
     done = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, timeout=60)
     assert replay.split_output(done.stdout)[1] == "fine"
-    assert replay.added_imports(done.stdout) == ["import logging", "from typing import Any"]
+    assert replay.added_imports(done.stdout) == ["import logging", "from typing import Any", "from types import TracebackType"]
     assert replay.exit_code(done.stdout, 1) == 0
 
 
