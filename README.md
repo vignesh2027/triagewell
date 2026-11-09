@@ -19,7 +19,7 @@ next step and a draft reply, in a few seconds and about a cent. Nothing is poste
 posting on.
 
 <!-- eval-summary -->
-**Measured, not claimed.** We replayed 54 closed public issues from pydantic/pydantic, pallets/click, mozilla-ai/any-llm, mozilla-ai/any-agent, Textualize/rich through hosted
+**Measured, not claimed.** I replayed 54 closed public issues from pydantic/pydantic, pallets/click, mozilla-ai/any-llm, mozilla-ai/any-agent, Textualize/rich through hosted
 Otari as if they had just been opened (no labels, no comments, no state) and scored Triagewell against what the
 maintainers actually did. Details, caveats and every issue are in [Evaluation](#evaluation) and on the dashboard's
 Evaluation page.
@@ -47,12 +47,12 @@ used for a reason the feature exists, not to tick a box.
 
 ## Prior art
 
-Issue-triage assistants are not new, and running a reporter's code is not new either, so here is what we checked on
+Issue-triage assistants are not new, and running a reporter's code is not new either, so here is what I checked on
 6 Nov 2026 and where Triagewell sits.
 
 | Tool | Runs the reporter's code? | When | Verdict to the maintainer? | Checks cited evidence against tool calls? |
 | --- | --- | --- | --- | --- |
-| [Dosu](https://dosu.dev) | not that we could confirm | triage: labels, duplicates, draft answers | no | not documented |
+| [Dosu](https://dosu.dev) | not that I could confirm | triage: labels, duplicates, draft answers | no | not documented |
 | [GitHub AI issue triage](https://docs.github.com/en/issues/tracking-your-work-with-issues/administering-issues/triaging-an-issue-with-ai), [AI labeler action](https://github.blog/changelog/2025-09-05-github-actions-ai-labeler-and-moderator-with-the-github-models-inference-api) | no | triage | no | no |
 | [Linear Triage Intelligence](https://linear.app/docs/triage-intelligence), [Mozilla bugbug](https://github.com/mozilla/bugbug) | no | triage | no | no |
 | [Copilot coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent), [OpenHands resolver](https://docs.openhands.dev/openhands/usage/run-openhands/github-action), [SWE-agent](https://github.com/SWE-agent/SWE-agent), Devin, Jules | yes, inside a fixing run (SWE-agent's default prompt writes a reproduction script first) | when asked to fix | not as a triage verdict | no |
@@ -64,11 +64,11 @@ Research has the same idea for fixing, not triage: LIBRO (ICSE 2023) wrote bug-r
 Defects4J bugs, Issue2Test (2025) about a third of SWT-bench-lite, Google's agent-written reproduction tests (2025)
 helped its repair system fix about 30% more bugs.
 
-So Triagewell is not the first tool to run an issue's code. What we did not find anywhere is the combination: the
+So Triagewell is not the first tool to run an issue's code. What I did not find anywhere is the combination: the
 reporter's snippet replayed automatically on every new issue, in a disposable sandbox, **against the release the
 reporter had**, with a strict three-way verdict, every cited source checked against the calls the gateway actually
 ran, and the whole thing measured against what maintainers later did (below). If you know a tool that does this, open
-an issue and we will add it here.
+an issue and I will add it here.
 
 ## Evaluation
 
@@ -139,8 +139,8 @@ sandbox very little. Both rounds' raw rows are in
   check can judge; some need API keys or services the sandbox does not have. Triagewell says so instead of guessing.
 * Of the 41 issues with a snippet, 7 sandbox calls were refused with an HTML 403 by the AWS load balancer in front of
   otari.ai, not by Otari (the same snippet alone runs; wrapped in the install-and-run program it is refused), and 2
-  timed out at the edge. Triagewell reports these as "not run" and does not try to slip past the firewall; the
-  report for Otari is in [UPSTREAM.md](UPSTREAM.md).
+  timed out at the edge. Triagewell reports these as "not run" and does not try to slip past the firewall; I reported it to
+  Otari as [mozilla-ai/otari#3012](https://github.com/mozilla-ai/otari/issues/3012).
 * The investigator asks DeepWiki, which describes each repository as it is today, so it can know about later fixes.
   The sandbox verdict cannot: it runs the release from before the issue.
 * The reply screen and the kind are model output; the reproduction verdict and the unverified marks are not.

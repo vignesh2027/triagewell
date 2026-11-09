@@ -215,7 +215,7 @@ def write_readme_summary(res: dict) -> None:
         return f"{now}; first run {fmt(first[a][b])}" if first else now
 
     block = "\n".join([
-        f"**Measured, not claimed.** We replayed {res['issues']} closed public issues from {', '.join(res['repos'])} through hosted",
+        f"**Measured, not claimed.** I replayed {res['issues']} closed public issues from {', '.join(res['repos'])} through hosted",
         "Otari as if they had just been opened (no labels, no comments, no state) and scored Triagewell against what the",
         "maintainers actually did. Details, caveats and every issue are in [Evaluation](#evaluation) and on the dashboard's",
         "Evaluation page.",
